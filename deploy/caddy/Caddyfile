@@ -2,25 +2,22 @@
 # Muse — Caddy reverse proxy + auto-TLS
 # ============================================
 # Place at deploy/caddy/Caddyfile. Caddy auto-issues Let's Encrypt certs.
+# Validate with:  docker run --rm -e PUBLIC_DOMAIN=localhost -v $(pwd)/deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 # ============================================
 
 {$PUBLIC_DOMAIN} {
     encode zstd gzip
-    reverse_proxy frontend-gateway:8000 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        lb_policy round_robin
-    }
+    reverse_proxy frontend-gateway:8000
 
-    # Direct API path for the AI engine if you want to expose it
     @ai path /api/ai/*
     handle @ai {
         reverse_proxy ai-engine:8000
     }
 
-    # Long-lived connections for islands
-    reverse_proxy /_frsh/* frontend-gateway:8000
+    @fresh path /_frsh/*
+    handle @fresh {
+        reverse_proxy frontend-gateway:8000
+    }
 
     log {
         output file /data/access.log {
@@ -28,9 +25,4 @@
             roll_keep 5
         }
     }
-}
-
-# Health endpoint behind Caddy for monitoring
-{$PUBLIC_DOMAIN}:443/health {
-    reverse_proxy frontend-gateway:8000
 }
