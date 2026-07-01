@@ -1,0 +1,121 @@
+# ============================================
+# Muse — Production docker-compose
+# ============================================
+# Target: self-hosted VPS (Ubuntu 22.04+, Docker 24+, Compose v2)
+# Usage:
+#   cp deploy/env/.env.example .env && edit
+#   docker compose -f deploy/compose/docker-compose.prod.yml up -d
+# ============================================
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend-gateway:
+        condition: service_healthy
+    networks: [muse]
+
+  frontend-gateway:
+    build:
+      context: ../../frontend-gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - PORT=8000
+      - AI_ENGINE_URL=http://ai-engine:8000
+      - BLOCKCHAIN_URL=http://blockchain-security:3000
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - NODE_ENV=${NODE_ENV}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-engine:
+        condition: service_started
+      blockchain-security:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [muse]
+
+  ai-engine:
+    build:
+      context: ../../ai-engine
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [muse]
+
+  blockchain-security:
+    build:
+      context: ../../blockchain-security
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - PORT=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [muse]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [muse]
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  muse:
+    driver: bridge
