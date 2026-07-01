@@ -86,6 +86,17 @@ export const markAsRead = (id: string) => {
   };
 };
 
+export const markAllAsRead = () => {
+  notificationSignal.value = {
+    ...notificationSignal.value,
+    notifications: notificationSignal.value.notifications.map((n) => ({
+      ...n,
+      read: true,
+    })),
+    unreadCount: 0,
+  };
+};
+
 export const clearAll = () => {
   notificationSignal.value = initialState;
 };

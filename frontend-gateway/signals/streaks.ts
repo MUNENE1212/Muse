@@ -1,10 +1,16 @@
 import { signal } from "@preact/signals";
+import {
+  safeLocalGet,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
+import { generateSafeId } from "../utils/safeId.ts";
 
 export type StreakState = "ignition" | "resonance" | "fading" | "broken";
 
 const TWENTY_FOUR_HOURS = 1000 * 60 * 60 * 24;
 const FOUR_HOURS = 1000 * 60 * 60 * 4;
-const STORAGE_KEY = "muse-streaks";
+const STORAGE_KEY = "muse_user_streaks_v1";
+const LEGACY_STORAGE_KEYS = ["muse-streaks"];
 
 export interface StreakHistory {
   timestamp: number;
@@ -80,30 +86,41 @@ const SEED_STREAKS: UserStreak[] = [
   },
 ];
 
-function loadStreaks(): UserStreak[] {
-  if (typeof localStorage === "undefined") return SEED_STREAKS;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as UserStreak[];
-      return parsed.length > 0 ? parsed : SEED_STREAKS;
-    }
-    return SEED_STREAKS;
-  } catch {
-    return SEED_STREAKS;
+function migrateFromLegacy(): UserStreak[] | null {
+  if (typeof globalThis.localStorage === "undefined") return null;
+  for (const legacyKey of LEGACY_STORAGE_KEYS) {
+    try {
+      const raw = globalThis.localStorage.getItem(legacyKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as UserStreak[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        safeLocalSet(STORAGE_KEY, parsed);
+        try {
+          globalThis.localStorage.removeItem(legacyKey);
+        } catch { /* best effort cleanup */ }
+        return parsed;
+      }
+    } catch { /* keep scanning legacy keys */ }
   }
+  return null;
+}
+
+function loadStreaks(): UserStreak[] {
+  const fromCanonical = safeLocalGet<UserStreak[] | null>(STORAGE_KEY, null);
+  if (Array.isArray(fromCanonical) && fromCanonical.length > 0) {
+    return fromCanonical;
+  }
+  const migrated = migrateFromLegacy();
+  if (migrated) return migrated;
+  return SEED_STREAKS;
 }
 
 export const streaksSignal = signal<UserStreak[]>(loadStreaks());
 
 // Auto-persist on change
-if (typeof localStorage !== "undefined") {
-  streaksSignal.subscribe((streaks) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(streaks));
-    } catch { /* quota exceeded fallback */ }
-  });
-}
+streaksSignal.subscribe((streaks) => {
+  safeLocalSet(STORAGE_KEY, streaks);
+});
 
 /** Derives the visual state of a streak based on time and count. */
 export function getStreakState(streak: UserStreak): StreakState {
@@ -139,7 +156,7 @@ export function startStreak(
 ) {
   const now = Date.now();
   const newStreak: UserStreak = {
-    id: `str-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateSafeId("str"),
     partnerId,
     partnerName,
     partnerAvatar,

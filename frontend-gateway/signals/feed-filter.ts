@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { type Perspective } from "./connections.ts";
 
 export interface FeedFilter {
   type: "all" | "following";
@@ -18,13 +19,14 @@ export const setFeedFilter = (type: "all" | "following") => {
 };
 
 export const filterPerspectivesByFollowing = (
-  perspectives: any[],
-  followingIds: string[],
+  perspectives: Perspective[],
+  followingNames: string[],
   filterType: "all" | "following",
-) => {
+): Perspective[] => {
   if (filterType === "all") {
     return perspectives;
   }
 
-  return perspectives.filter((p) => followingIds.includes(p.author.id));
+  const allowed = new Set(followingNames);
+  return perspectives.filter((p) => allowed.has(p.author.name));
 };

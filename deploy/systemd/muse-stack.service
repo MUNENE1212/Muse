@@ -1,0 +1,19 @@
+[Unit]
+Description=Muse production stack (Caddy + frontend-gateway + ai-engine + blockchain-security + postgres)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=muse
+Group=muse
+WorkingDirectory=/opt/muse/repo
+EnvironmentFile=/opt/muse/shared/.env
+ExecStart=/usr/bin/docker compose -f deploy/compose/docker-compose.prod.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f deploy/compose/docker-compose.prod.yml down
+ExecReload=/usr/bin/docker compose -f deploy/compose/docker-compose.prod.yml up -d --remove-orphans
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

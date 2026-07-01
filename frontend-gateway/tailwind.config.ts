@@ -15,6 +15,7 @@ export default {
           "card-light": "#f3f4f6",
           teal: "#2A9D8F", // AI/mood accent
           "gold-dim": "#8C6D35", // Muted gold for subtle states
+          accent: "#FF6B35", // Warm call-to-action accent (Capture modal)
         },
       },
       fontFamily: {

@@ -4,6 +4,8 @@
 
 This document summarizes the contribution work made to the Muse project under the spirit of **ubuntu** — collaborative, transparent, and oriented toward the greater health of the codebase. Every change below was designed to be reviewable, reversible, and additive.
 
+> **Reconciled against `deploy` after spec review.** See `docs/VALIDATION_REPORT.md` for the audit that produced the canonical architecture docs in `docs/architecture/`. Signal count corrected from "17" (README) to **20** (actual files in `frontend-gateway/signals/`). NLP engine (`nlp_engine.py`) and orchestrator (`pipeline.py`) are **planned**, not shipped — see `docs/architecture/03-ai-engine.md` §7.
+
 ## Repository state
 
 - **Main branch**: `main` (unchanged from upstream `kagz-01/Muse`)

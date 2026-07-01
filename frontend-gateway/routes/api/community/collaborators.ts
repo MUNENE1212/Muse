@@ -3,69 +3,79 @@ import { queryDB } from "../../../utils/db.ts";
 import { getSessionUser, isDemoUser } from "../../../utils/auth.ts";
 import { DEMO_COLLABORATORS } from "../../../utils/demo_data.ts";
 
+interface CollaboratorRow {
+  id: string;
+  username: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+const json = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+
+const FALLBACK_AVATAR = (seed: string) =>
+  `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+    encodeURIComponent(seed)
+  }`;
+
+function deriveName(row: CollaboratorRow): string {
+  if (row.username && row.username.trim()) return row.username;
+  if (row.email && row.email.includes("@")) return row.email.split("@")[0];
+  return row.id;
+}
+
 export const handler: Handlers = {
   async GET(req) {
     const userId = await getSessionUser(req);
-    // Demo mode — return template collaborators
     if (isDemoUser(userId)) {
-      return new Response(
-        JSON.stringify({ collaborators: DEMO_COLLABORATORS }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      return json({ collaborators: DEMO_COLLABORATORS, demo: true }, 200);
     }
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
+      return json({ error: "Unauthorized" }, 401);
     }
 
     try {
-      // In production, match users based on shared tags in journal_entries
-      // For now, we will select random users to simulate the network
-      const users = await queryDB(
+      const users = await queryDB<CollaboratorRow>(
         `
-        SELECT id, username, email, avatar_url 
-        FROM users 
+        SELECT id, username, email, avatar_url
+        FROM users
         WHERE id != $1
         LIMIT 10
       `,
         userId,
       );
 
-      const collaborators = users.map((e: unknown, i: number) => {
-        const u = e as Record<string, unknown>;
+      const roles = ["Synthesizer", "Architect", "Challenger", "Observer"];
+      const statuses = ["Online", "Reflecting", "Deep Focus", "Offline"];
+      const auras = ["#60a5fa", "#34d399", "#fbbf24", "#fb7185"];
+      const intelligenceProfiles = ["Synthesizer", "Architect", "Challenger"];
+
+      const collaborators = users.map((row: CollaboratorRow, i: number) => {
+        const name = deriveName(row);
         return {
-          id: u.id,
-          name: u.username || (u.email as string).split("@")[0],
-          avatar: u.avatar_url ||
-            "https://api.dicebear.com/7.x/avataaars/svg?seed=" + u.username,
-          role: ["Synthesizer", "Architect", "Challenger", "Observer"][i % 4],
-          status: ["Online", "Reflecting", "Deep Focus", "Offline"][i % 4],
+          id: row.id,
+          name,
+          avatar: row.avatar_url || FALLBACK_AVATAR(name),
+          role: roles[i % roles.length],
+          status: statuses[i % statuses.length],
           bio: "Exploring the intersections of systems and human thought.",
           sharedThemes: ["Next.js", "AI", "Design Systems"],
-          aura: ["#60a5fa", "#34d399", "#fbbf24", "#fb7185"][i % 4],
+          aura: auras[i % auras.length],
           intelligenceProfile:
-            ["Synthesizer", "Architect", "Challenger"][i % 3],
-          matchPercentage: Math.floor(Math.random() * 30) + 70, // 70-99%
+            intelligenceProfiles[i % intelligenceProfiles.length],
+          // demoData: random value used until real resonance scoring ships
+          matchPercentage: Math.floor(Math.random() * 30) + 70,
           topCitedNode: "Mental Models for Engineers",
         };
       });
 
-      return new Response(JSON.stringify({ collaborators }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return json({ collaborators, demo: true }, 200);
     } catch (error: unknown) {
       console.error("Failed to fetch collaborators:", error);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch collaborators" }),
-        {
-          status: 500,
-        },
-      );
+      return json({ error: "Failed to fetch collaborators" }, 500);
     }
   },
 };

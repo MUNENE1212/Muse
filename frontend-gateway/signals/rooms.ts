@@ -1,6 +1,11 @@
 import { signal } from "@preact/signals";
 import { itemsSignal } from "./items.ts";
 import { threadsSignal } from "./threads.ts";
+import {
+  safeLocalGet,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
+import { generateSafeId } from "../utils/safeId.ts";
 
 export type RoomTheme =
   | "indigo"
@@ -146,31 +151,16 @@ const STORAGE_KEY = "muse_rooms_v2";
 const INITIAL_ROOMS: Room[] = [];
 
 function loadRooms(): Room[] {
-  if (typeof localStorage === "undefined") return INITIAL_ROOMS;
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return INITIAL_ROOMS;
-    const parsed = JSON.parse(stored) as Room[];
-    const base = Array.isArray(parsed) ? parsed : INITIAL_ROOMS;
-
-    return base;
-  } catch {
-    return INITIAL_ROOMS;
-  }
+  const stored = safeLocalGet<Room[] | null>(STORAGE_KEY, null);
+  if (Array.isArray(stored)) return stored;
+  return INITIAL_ROOMS;
 }
 
 export const roomsSignal = signal<Room[]>(loadRooms());
 
-if (typeof localStorage !== "undefined") {
-  roomsSignal.subscribe((rooms: Room[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rooms));
-    } catch {
-      // ignore write errors in restricted environments
-    }
-  });
-}
+roomsSignal.subscribe((rooms: Room[]) => {
+  safeLocalSet(STORAGE_KEY, rooms);
+});
 
 export function addRoom(
   room: Omit<
@@ -178,7 +168,7 @@ export function addRoom(
     "id" | "updatedAt" | "count" | "semanticTags" | "resonanceMetrics"
   >,
 ) {
-  const newId = "r" + (roomsSignal.value.length + 1);
+  const newId = generateSafeId("r");
   const newRoom: Room = {
     ...room,
     id: newId,

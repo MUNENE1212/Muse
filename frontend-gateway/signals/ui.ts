@@ -17,15 +17,8 @@ export type AppAccentColor =
   | "white";
 export type AppFontSize = "small" | "medium" | "large";
 
-export type AppNotification = {
-  id: string;
-  title: string;
-  detail: string;
-  time: string;
-  isRead: boolean;
-};
-
 const THEME_STORAGE_KEY = "muse-theme";
+const SETTINGS_STORAGE_KEY = "muse-fresh-settings";
 
 const ACCENT_RGB_MAP: Record<AppAccentColor, string> = {
   cyan: "34 211 238",
@@ -55,18 +48,6 @@ const FONT_SIZE_MAP: Record<AppFontSize, string> = {
   large: "18px",
 };
 
-export const notificationsSignal = signal<AppNotification[]>([]);
-
-export function addNotification(title: string, detail: string) {
-  const newNotification: AppNotification = {
-    id: `n-${Date.now()}`,
-    title,
-    detail,
-    time: "Just now",
-    isRead: false,
-  };
-  notificationsSignal.value = [newNotification, ...notificationsSignal.value];
-}
 export const appThemeSignal = signal<AppTheme>("dark");
 export const appAccentSignal = signal<AppAccentColor>("cyan");
 export const appFontSizeSignal = signal<AppFontSize>("medium");
@@ -94,30 +75,38 @@ function hexToRgbString(hex: string): string {
   return `${r} ${g} ${b}`;
 }
 
+function readSettings(): {
+  appearance?: Record<string, unknown>;
+  [key: string]: unknown;
+} {
+  try {
+    const raw = globalThis.localStorage?.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as {
+      appearance?: Record<string, unknown>;
+      [key: string]: unknown;
+    };
+  } catch {
+    return {};
+  }
+}
+
 function updateStoredAppearance(
   partial: Partial<
     { theme: AppTheme; accentColor: AppAccentColor; fontSize: AppFontSize }
   >,
 ) {
+  const parsed = readSettings();
+  const next = {
+    ...parsed,
+    appearance: {
+      ...(parsed.appearance ?? {}),
+      ...partial,
+    },
+  };
   try {
-    const settingsRaw = globalThis.localStorage?.getItem("muse-fresh-settings");
-    const parsed = settingsRaw
-      ? JSON.parse(settingsRaw) as {
-        appearance?: Record<string, unknown>;
-        [key: string]: unknown;
-      }
-      : {};
-
-    const next = {
-      ...parsed,
-      appearance: {
-        ...(parsed.appearance ?? {}),
-        ...partial,
-      },
-    };
-
     globalThis.localStorage?.setItem(
-      "muse-fresh-settings",
+      SETTINGS_STORAGE_KEY,
       JSON.stringify(next),
     );
   } catch {
@@ -131,18 +120,14 @@ function resolveSavedTheme(): AppTheme {
     const themes: AppTheme[] = ["dark", "dim", "tint", "light"];
     if (themes.includes(direct as AppTheme)) return direct as AppTheme;
 
-    const settingsRaw = globalThis.localStorage?.getItem("muse-fresh-settings");
-    if (settingsRaw) {
-      const parsed = JSON.parse(settingsRaw) as {
-        appearance?: { theme?: string };
-      };
-      if (parsed.appearance?.theme === "light") return "light";
-      if (parsed.appearance?.theme === "dark") return "dark";
-      if (parsed.appearance?.theme === "system") {
-        return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
+    const parsed = readSettings();
+    const theme = parsed.appearance?.theme as string | undefined;
+    if (theme === "light") return "light";
+    if (theme === "dark") return "dark";
+    if (theme === "system") {
+      return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     }
   } catch {
     // Keep fallback below.
@@ -178,28 +163,26 @@ export function initializeTheme() {
   appThemeSignal.value = theme;
   applyThemeToDocument(theme);
   try {
-    const settingsRaw = globalThis.localStorage?.getItem("muse-fresh-settings");
-    if (settingsRaw) {
-      const parsed = JSON.parse(settingsRaw) as {
-        appearance?: {
-          accentColor?: AppAccentColor;
-          customAccentHex?: string;
-          compactMode?: boolean;
-          animations?: boolean;
-          reduceMotion?: boolean;
-        };
-      };
-      if (parsed.appearance?.accentColor) {
-        appAccentSignal.value = parsed.appearance.accentColor;
-      }
-      // Restore custom accent hex if saved
-      if (parsed.appearance?.customAccentHex) {
-        customAccentHexSignal.value = parsed.appearance.customAccentHex;
-        applyCustomAccentToDocument(parsed.appearance.customAccentHex);
-        return; // Custom accent takes priority
-      }
-      // Restore appearance data attributes
-      applyAppearanceAttributes(parsed.appearance);
+    const parsed = readSettings();
+    const appearance = parsed.appearance as {
+      accentColor?: AppAccentColor;
+      customAccentHex?: string;
+      compactMode?: boolean;
+      animations?: boolean;
+      reduceMotion?: boolean;
+    } | undefined;
+    if (appearance?.accentColor) {
+      appAccentSignal.value = appearance.accentColor;
+    }
+    // Restore custom accent hex if saved
+    if (appearance?.customAccentHex) {
+      customAccentHexSignal.value = appearance.customAccentHex;
+      applyCustomAccentToDocument(appearance.customAccentHex);
+      return; // Custom accent takes priority
+    }
+    // Restore appearance data attributes
+    if (appearance) {
+      applyAppearanceAttributes(appearance);
     }
   } catch {
     // Ignore
@@ -327,17 +310,4 @@ export function toggleNotifications() {
 
 export function closeNotifications() {
   isNotificationsOpenSignal.value = false;
-}
-
-export function markNotificationRead(id: string) {
-  notificationsSignal.value = notificationsSignal.value.map((notification) =>
-    notification.id === id ? { ...notification, isRead: true } : notification
-  );
-}
-
-export function markAllNotificationsRead() {
-  notificationsSignal.value = notificationsSignal.value.map((notification) => ({
-    ...notification,
-    isRead: true,
-  }));
 }

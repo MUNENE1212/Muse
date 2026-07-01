@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Aggregate CI status workflow. The language-specific workhorse workflows
+# (deno.yml, python.yml, rust.yml) run in parallel and are filtered by paths.
+# This file is the canonical "CI" status surfaced in the README badge.
+# Cancels in-progress runs for the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deno:
+    name: Deno (frontend-gateway)
+    if: |
+      (github.event_name == 'pull_request') ||
+      (contains(github.event.head_commit.modified, 'frontend-gateway/') || contains(github.event.head_commit.added, 'frontend-gateway/')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/deno.yml
+
+  python:
+    name: Python (ai-engine)
+    if: |
+      (github.event_name == 'pull_request') ||
+      (contains(github.event.head_commit.modified, 'ai-engine/') || contains(github.event.head_commit.added, 'ai-engine/')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/python.yml
+
+  rust:
+    name: Rust (blockchain-security, contracts)
+    if: |
+      (github.event_name == 'pull_request') ||
+      (contains(github.event.head_commit.modified, 'blockchain-security/') || contains(github.event.head_commit.added, 'blockchain-security/')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/rust.yml

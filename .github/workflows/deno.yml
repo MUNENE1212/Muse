@@ -1,0 +1,82 @@
+name: Deno
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend-gateway/**"
+      - ".github/workflows/deno.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend-gateway/**"
+      - ".github/workflows/deno.yml"
+  workflow_call:
+
+concurrency:
+  group: deno-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, format, type-check, test (${{ matrix.os }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        deno: ["1.46.x"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Deno ${{ matrix.deno }}
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ matrix.deno }}
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('frontend-gateway/deno.json', 'frontend-gateway/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Verify formatting
+        working-directory: frontend-gateway
+        run: deno fmt --check
+
+      - name: Lint
+        working-directory: frontend-gateway
+        run: deno lint
+
+      - name: Type check (.ts)
+        working-directory: frontend-gateway
+        run: deno check **/*.ts
+
+      - name: Type check (.tsx)
+        working-directory: frontend-gateway
+        run: deno check **/*.tsx
+
+      - name: Run unit tests
+        working-directory: frontend-gateway
+        run: deno task test
+
+      - name: Generate coverage
+        if: matrix.deno == '1.46.x' && github.event_name == 'push'
+        working-directory: frontend-gateway
+        run: deno task coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.deno == '1.46.x' && github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          directory: frontend-gateway/coverage
+          files: coverage.lcov
+          flags: frontend-gateway
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

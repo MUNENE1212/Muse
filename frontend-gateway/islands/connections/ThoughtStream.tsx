@@ -37,7 +37,7 @@ export default function ThoughtStream(
   // Apply filter based on selection
   const perspectives = filterPerspectivesByFollowing(
     allPerspectives,
-    followers.following.map((f) => f.id),
+    followers.following.map((f) => f.name),
     feedFilter.type,
   );
 

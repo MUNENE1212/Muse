@@ -8,7 +8,13 @@ export const handler: Handlers = {
     try {
       const userId = await getSessionUser(req);
       if (!userId) {
-        return new Response("Unauthorized", { status: 401 });
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
 
       const body = await req.json();
@@ -51,8 +57,13 @@ export const handler: Handlers = {
       if (action === "verify") {
         if (!token || !secret) {
           return new Response(
-            "Token and secret are required for verification",
-            { status: 400 },
+            JSON.stringify({
+              error: "Token and secret are required for verification",
+            }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            },
           );
         }
 
@@ -65,16 +76,35 @@ export const handler: Handlers = {
             headers: { "Content-Type": "application/json" },
           });
         } else {
-          return new Response("Invalid 2FA code", { status: 400 });
+          return new Response(
+            JSON.stringify({ error: "Invalid 2FA code" }),
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
       }
 
-      return new Response("Invalid action", { status: 400 });
+      return new Response(
+        JSON.stringify({ error: "Invalid action" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } catch (e) {
       console.error("Error in 2FA endpoint:", e);
-      return new Response(`Internal Server Error: ${(e as Error).message}`, {
-        status: 500,
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Internal Server Error",
+          details: (e as Error).message,
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   },
 };
