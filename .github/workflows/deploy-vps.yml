@@ -1,0 +1,62 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (branch, tag, sha)"
+        required: false
+        default: "main"
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${{ vars.VPS_HOST }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production   # requires manual approval if configured
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ vars.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync repo to VPS
+        run: |
+          ssh -A ${{ vars.VPS_USER }}@${{ vars.VPS_HOST }} \
+            "cd /opt/muse && \
+             [ -d repo/.git ] || (mkdir -p repo && cd repo && git clone git@github.com:MUNENE1212/Muse.git .); \
+             cd repo && git remote set-url origin git@github.com:MUNENE1212/Muse.git && git fetch --prune"
+
+      - name: Run deploy
+        run: |
+          ssh ${{ vars.VPS_USER }}@${{ vars.VPS_HOST }} \
+            "/opt/muse/repo/deploy/scripts/deploy.sh"
+
+      - name: Health check
+        run: |
+          sleep 15
+          STATUS=$(curl -fsS -o /dev/null -w "%{http_code}" https://${{ vars.PUBLIC_DOMAIN }}/ || echo "000")
+          if [[ "$STATUS" != "200" ]]; then
+            echo "Health check failed: HTTP $STATUS"
+            exit 1
+          fi
+          echo "Health check OK"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deploy to ${{ vars.VPS_HOST }} failed — see run logs"
