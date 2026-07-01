@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import * as Icons from "lucide-preact";
 import {
-  addNotification,
   isCaptureOpenSignal,
   toggleCapture,
 } from "../../signals/ui.ts";
+import { addNotification } from "../../signals/notifications.ts";
 import { addRoom, roomsSignal } from "../../signals/rooms.ts";
 import { addItem } from "../../signals/items.ts";
 
@@ -93,6 +93,7 @@ export default function CaptureModal() {
       isPublic: false,
     });
     addNotification(
+      "achievement",
       "Synthesis Captured",
       `"${title}" was committed to the vault.`,
     );

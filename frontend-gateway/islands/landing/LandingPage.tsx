@@ -25,14 +25,11 @@ export default function LandingPage() {
     setIsDemoOpen(true);
   };
 
-  // Demo entry: submit a server-side POST so the httpOnly cookie is set properly.
-  // This makes demo mode persist across ALL page navigations — no URL params needed.
+  // Demo entry: the server sets an httpOnly cookie on the demo route,
+  // then redirects into the app. A plain navigation is enough — no form
+  // submission is required, and it avoids the brief "submitting" flash.
   const handleGuestEntry = () => {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = "/api/auth/demo";
-    document.body.appendChild(form);
-    form.submit();
+    globalThis.location.href = "/api/auth/demo";
   };
 
   const currentTheme = appThemeSignal.value;

@@ -1,26 +1,49 @@
-import { FreshContext } from "$fresh/server.ts";
+import { executeDB, queryDB } from "../../utils/db.ts";
+import {
+  isDemoUser,
+  requireDemoOrSession,
+} from "../../utils/auth.ts";
+import { DEMO_USER } from "../../utils/demo_data.ts";
 
-// Mock database for mirror stats
-const userStatsDatabase = new Map<
-  string,
-  {
-    views: number;
-    likes: number;
-    comments: number;
-    collaborations: number;
-    follows: number;
-    circleJoins: number;
-    followerCount: number;
-    followingCount: number;
-    followerHistory: { date: string; count: number }[];
-  }
->();
+const USER_FOLLOWS_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS user_follows (
+    follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (follower_id, following_id)
+  )
+`;
+
+async function ensureFollowsTable() {
+  await executeDB(USER_FOLLOWS_SCHEMA);
+}
+
+function jsonResponse(body: Record<string, unknown>, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function aggregateCount(
+  query: string,
+  ...args: unknown[]
+): Promise<number> {
+  const rows = await queryDB(query, ...args) as { count: number }[];
+  return rows[0]?.count ?? 0;
+}
 
 export const handler = async (req: Request) => {
   if (req.method !== "GET") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-    });
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
+
+  let sessionUserId: string;
+  try {
+    sessionUserId = await requireDemoOrSession(req);
+  } catch (response) {
+    if (response instanceof Response) return response;
+    throw response;
   }
 
   try {
@@ -28,50 +51,124 @@ export const handler = async (req: Request) => {
     const userId = url.searchParams.get("userId");
 
     if (!userId) {
-      return new Response(JSON.stringify({ error: "userId required" }), {
-        status: 400,
-      });
+      return jsonResponse({ error: "userId required" }, 400);
     }
 
-    // Return mock stats
-    const stats = userStatsDatabase.get(userId) || {
-      views: 1250,
-      likes: 342,
-      comments: 89,
-      collaborations: 23,
-      follows: 156,
-      circleJoins: 12,
-      followerCount: 156,
-      followingCount: 89,
-      followerHistory: [
-        { date: "Mon", count: 120 },
-        { date: "Tue", count: 128 },
-        { date: "Wed", count: 135 },
-        { date: "Thu", count: 142 },
-        { date: "Fri", count: 149 },
-        { date: "Sat", count: 154 },
-        { date: "Sun", count: 156 },
-      ],
+    if (!isDemoUser(sessionUserId) && userId !== sessionUserId) {
+      return jsonResponse(
+        { error: "userId must match the active session" },
+        403,
+      );
+    }
+
+    if (isDemoUser(sessionUserId)) {
+      return jsonResponse(
+        {
+          stats: {
+            views: 0,
+            likes: 0,
+            comments: 0,
+            collaborations: 0,
+            follows: 0,
+            circleJoins: 0,
+            followerCount: 0,
+            followingCount: 0,
+            followerHistory: [],
+          },
+          activity: [],
+          followerCount: 0,
+          followingCount: 0,
+          followerHistory: [],
+          isLoading: false,
+          error: null,
+          demo: true,
+          user: DEMO_USER.id,
+        },
+        200,
+      );
+    }
+
+    await ensureFollowsTable();
+
+    const [
+      journalCount,
+      roomCount,
+      artifactCount,
+      threadCount,
+      followerCount,
+      followingCount,
+      historyRows,
+    ] = await Promise.all([
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM journal_entries WHERE user_id = $1`,
+        userId,
+      ),
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM rooms WHERE user_id = $1`,
+        userId,
+      ),
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM artifacts a
+         JOIN rooms r ON r.id = a.room_id
+         WHERE r.user_id = $1`,
+        userId,
+      ),
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM threads t
+         JOIN rooms r ON r.id = t.room_id
+         WHERE r.user_id = $1`,
+        userId,
+      ),
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM user_follows WHERE following_id = $1`,
+        userId,
+      ),
+      aggregateCount(
+        `SELECT COUNT(*)::int AS count FROM user_follows WHERE follower_id = $1`,
+        userId,
+      ),
+      queryDB(
+        `SELECT to_char(date_trunc('day', created_at), 'Dy') AS day,
+                COUNT(*)::int AS count
+         FROM user_follows
+         WHERE following_id = $1
+           AND created_at >= NOW() - INTERVAL '7 days'
+         GROUP BY day
+         ORDER BY MIN(created_at)`,
+        userId,
+      ) as Promise<{ day: string; count: number }[]>,
+    ]);
+
+    const followerHistory = (historyRows ?? []).map((row) => ({
+      date: row.day,
+      count: row.count,
+    }));
+
+    const stats = {
+      views: journalCount,
+      likes: 0,
+      comments: 0,
+      collaborations: 0,
+      follows: followerCount,
+      circleJoins: 0,
+      followerCount,
+      followingCount,
+      followerHistory,
     };
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         stats,
         activity: [],
-        followerCount: stats.followerCount,
-        followingCount: stats.followingCount,
-        followerHistory: stats.followerHistory,
+        followerCount,
+        followingCount,
+        followerHistory,
         isLoading: false,
         error: null,
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
       },
+      200,
     );
-  } catch (err) {
-    return new Response(JSON.stringify({ error: "Invalid request" }), {
-      status: 400,
-    });
+  } catch (_err) {
+    return jsonResponse({ error: "Invalid request" }, 400);
   }
 };

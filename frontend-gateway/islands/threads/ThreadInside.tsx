@@ -122,7 +122,7 @@ export default function ThreadInside({ threadId }: { threadId: string }) {
     );
   }
 
-  const mood = moodMapping[thread.mood] || moodMapping["contemplative"];
+  const mood = moodMapping[thread.mood] || moodMapping["focus"];
 
   return (
     <div className="pb-24 md:pb-10 min-h-screen bg-[#0a0a0a] relative overflow-hidden">

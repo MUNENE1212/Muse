@@ -10,3 +10,33 @@ _fresh/
 # npm dependencies
 node_modules/
 .worktrees/
+
+# Python
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Rust
+target/
+**/*.rs.bk
+
+# Deno
+deno.lock
+deno_out.log
+
+# IDE / OS
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+.cache/

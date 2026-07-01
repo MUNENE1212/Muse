@@ -1,26 +1,37 @@
 import { Pool } from "postgres";
 
-// We read from Deno Deploy environment variables or a local .env file.
-const DATABASE_URL = Deno.env.get("DATABASE_URL") ||
-  "postgres://user:password@localhost:5432/muse";
+const DATABASE_URL = Deno.env.get("DATABASE_URL");
 
-// Create a connection pool with 3 concurrent connections max to fit within free-tier limits.
+if (!DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL is not set. Set the DATABASE_URL environment variable to a postgres:// connection string before starting the gateway.",
+  );
+}
+
 const pool = new Pool(DATABASE_URL, 3, true);
 
-export async function queryDB(query: string, ...args: any[]) {
+function assertQuery(query: unknown): asserts query is string {
+  if (typeof query !== "string" || query.trim().length === 0) {
+    throw new Error("query must be a non-empty string");
+  }
+}
+
+export async function queryDB(query: string, ...args: unknown[]) {
+  assertQuery(query);
   const client = await pool.connect();
   try {
-    const result = await client.queryObject(query, ...args);
+    const result = await client.queryObject({ text: query, args });
     return result.rows;
   } finally {
     client.release();
   }
 }
 
-export async function executeDB(query: string, ...args: any[]) {
+export async function executeDB(query: string, ...args: unknown[]) {
+  assertQuery(query);
   const client = await pool.connect();
   try {
-    const result = await client.queryObject(query, ...args);
+    const result = await client.queryObject({ text: query, args });
     return result;
   } finally {
     client.release();

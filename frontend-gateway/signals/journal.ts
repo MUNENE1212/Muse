@@ -1,4 +1,9 @@
 import { signal } from "@preact/signals";
+import {
+  safeLocalGet,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
+import { generateSafeId } from "../utils/safeId.ts";
 
 export type JournalMood =
   | "reflective"
@@ -105,16 +110,12 @@ const STORAGE_KEY = "muse_journal_v2";
 const STREAK_METADATA_KEY = "muse_streak_metadata_v1";
 
 function loadStreakMetadata(): StreakData {
-  if (typeof localStorage === "undefined") {
-    return getDefaultStreakData();
-  }
-  try {
-    const stored = localStorage.getItem(STREAK_METADATA_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch {
-    // ignore parse errors
+  const stored = safeLocalGet<Partial<StreakData> | null>(
+    STREAK_METADATA_KEY,
+    null,
+  );
+  if (stored && typeof stored === "object") {
+    return { ...getDefaultStreakData(), ...stored };
   }
   return getDefaultStreakData();
 }
@@ -167,7 +168,7 @@ function normalizeJournalEntry(raw: unknown): JournalEntry | null {
   return {
     id: typeof entry.id === "string" && entry.id.length > 0
       ? entry.id
-      : generateSafeId(),
+      : generateSafeId("j"),
     body,
     mood: isJournalMood(entry.mood) ? entry.mood : "reflective",
     customMood: typeof entry.customMood === "string"
@@ -205,22 +206,11 @@ function normalizeJournalEntry(raw: unknown): JournalEntry | null {
 }
 
 function loadJournal(): JournalEntry[] {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as unknown;
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-          .map(normalizeJournalEntry)
-          .filter((entry): entry is JournalEntry => entry !== null);
-      } catch {
-        return [];
-      }
-    }
-  } catch {
-    return [];
+  const parsed = safeLocalGet<unknown>(STORAGE_KEY, null);
+  if (Array.isArray(parsed)) {
+    return parsed
+      .map(normalizeJournalEntry)
+      .filter((entry): entry is JournalEntry => entry !== null);
   }
 
   // Seed initial data if empty
@@ -258,35 +248,15 @@ export const journalSignal = signal<JournalEntry[]>(loadJournal());
 export const streakMetadataSignal = signal<StreakData>(loadStreakMetadata());
 
 // Persistence
-if (typeof localStorage !== "undefined") {
-  journalSignal.subscribe((entries: JournalEntry[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-    } catch {
-      // ignore write errors in restricted environments
-    }
-  });
+journalSignal.subscribe((entries: JournalEntry[]) => {
+  safeLocalSet(STORAGE_KEY, entries);
+});
 
-  streakMetadataSignal.subscribe((metadata: StreakData) => {
-    try {
-      localStorage.setItem(STREAK_METADATA_KEY, JSON.stringify(metadata));
-    } catch {
-      // ignore write errors
-    }
-  });
-}
+streakMetadataSignal.subscribe((metadata: StreakData) => {
+  safeLocalSet(STREAK_METADATA_KEY, metadata);
+});
 
 export const dailyWordGoalSignal = signal(500);
-
-// Safe ID generator that works even if crypto.randomUUID is not available (e.g. over local HTTP)
-function generateSafeId(): string {
-  if (
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
-}
 
 export async function addEntry(
   body = "",
@@ -547,24 +517,41 @@ export function resetJournalEntries() {
 
 // ============ PHASE 2: VAULT & SECURITY ============
 
-function hashPassword(password: string): string {
-  // Simple djb2 hash - for local encryption only, not production-grade
-  let hash = 5381;
-  for (let i = 0; i < password.length; i++) {
-    hash = ((hash << 5) + hash) + password.charCodeAt(i);
-    hash = hash & 0xffffffff;
+function generateVaultSalt(): string {
+  if (
+    typeof crypto === "undefined" ||
+    typeof crypto.getRandomValues !== "function"
+  ) {
+    return Math.random().toString(36).slice(2, 18);
   }
-  return Math.abs(hash).toString(16);
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function createVaultEntry(
+async function hashVaultPassword(
+  password: string,
+  salt: string,
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(salt + password);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  const hex = Array.from(new Uint8Array(digest)).map((b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+  return `${salt}$${hex}`;
+}
+
+export async function createVaultEntry(
   entry: JournalEntry,
   password: string,
-): JournalEntry {
+): Promise<JournalEntry> {
+  const salt = generateVaultSalt();
+  const hashed = await hashVaultPassword(password, salt);
   const updated = { ...entry };
   updated.vault = {
     isVaulted: true,
-    passwordHash: hashPassword(password),
+    passwordHash: hashed,
     createdAt: Date.now(),
   };
   updated.isPublic = false;
@@ -572,12 +559,15 @@ export function createVaultEntry(
   return updated;
 }
 
-export function verifyVaultPassword(
+export async function verifyVaultPassword(
   entry: JournalEntry,
   password: string,
-): boolean {
+): Promise<boolean> {
   if (!entry.vault || !entry.vault.passwordHash) return false;
-  return entry.vault.passwordHash === hashPassword(password);
+  const [salt] = entry.vault.passwordHash.split("$");
+  if (!salt) return false;
+  const candidate = await hashVaultPassword(password, salt);
+  return candidate === entry.vault.passwordHash;
 }
 
 export function unlockVaultEntry(entry: JournalEntry): JournalEntry {
@@ -634,7 +624,7 @@ export function createSynthesisEntry(
   isPublic = false,
 ): JournalEntry {
   const newEntry: JournalEntry = {
-    id: crypto.randomUUID(),
+    id: generateSafeId("j"),
     body,
     mood: "reflective",
     tags: ["synthesis"],

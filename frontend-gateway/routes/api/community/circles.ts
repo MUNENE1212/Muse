@@ -14,8 +14,8 @@ export const handler: Handlers = {
     }
     try {
       const circles = await queryDB(`
-        SELECT id, name, description, theme, member_count, recent_activity 
-        FROM circles 
+        SELECT id, name, description, theme, member_count, recent_activity
+        FROM circles
         ORDER BY member_count DESC
       `);
 
@@ -29,6 +29,7 @@ export const handler: Handlers = {
         JSON.stringify({ error: "Failed to fetch circles" }),
         {
           status: 500,
+          headers: { "Content-Type": "application/json" },
         },
       );
     }
@@ -37,15 +38,22 @@ export const handler: Handlers = {
   async POST(req) {
     const userId = await getSessionUser(req);
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
     // Demo users cannot mutate data
     if (isDemoUser(userId)) {
       return new Response(
         JSON.stringify({ error: "Not available in demo mode" }),
-        { status: 403 },
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -56,13 +64,16 @@ export const handler: Handlers = {
       if (!name || !description || !theme) {
         return new Response(
           JSON.stringify({ error: "Missing required fields" }),
-          { status: 400 },
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
         );
       }
 
       // Create circle
       const result = await executeDB(
-        `INSERT INTO circles (name, description, theme, member_count, recent_activity) 
+        `INSERT INTO circles (name, description, theme, member_count, recent_activity)
          VALUES ($1, $2, $3, 1, 'Circle founded.') RETURNING id`,
         name,
         description,
@@ -80,12 +91,16 @@ export const handler: Handlers = {
 
       return new Response(JSON.stringify({ success: true, circleId }), {
         status: 201,
+        headers: { "Content-Type": "application/json" },
       });
     } catch (error: unknown) {
       console.error("Failed to create circle:", error);
       return new Response(
         JSON.stringify({ error: "Failed to create circle" }),
-        { status: 500 },
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
       );
     }
   },

@@ -41,21 +41,15 @@ export function acceptBlueprint(id: string) {
   );
 
   // Create a new thread from the blueprint and return its id
-  try {
-    const newId = addThread({
-      title: bp.suggestedTitle,
-      description: bp.suggestedDescription,
-      mood: bp.suggestedMood,
-      itemIds: bp.itemIds,
-      sourceRoomIds: bp.sourceRoomIds,
-      isPublic: true,
-      thesis: bp.thesis,
-    });
-    return newId;
-  } catch {
-    // Best-effort: if thread creation fails, keep blueprint status but do not crash.
-    return undefined;
-  }
+  return addThread({
+    title: bp.suggestedTitle,
+    description: bp.suggestedDescription,
+    mood: bp.suggestedMood,
+    itemIds: bp.itemIds,
+    sourceRoomIds: bp.sourceRoomIds,
+    isPublic: true,
+    thesis: bp.thesis,
+  });
 }
 
 export function discardBlueprint(id: string) {

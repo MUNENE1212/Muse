@@ -1,0 +1,76 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "blockchain-security/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "blockchain-security/**"
+      - ".github/workflows/rust.yml"
+  workflow_call:
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt-clippy:
+    name: Format + Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            blockchain-security/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('blockchain-security/Cargo.lock', 'blockchain-security/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        working-directory: blockchain-security
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy (deny warnings)
+        working-directory: blockchain-security
+        run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: fmt-clippy
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            blockchain-security/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('blockchain-security/Cargo.lock', 'blockchain-security/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run tests
+        working-directory: blockchain-security
+        run: cargo test --all --no-fail-fast

@@ -1,4 +1,9 @@
 import { signal } from "@preact/signals";
+import {
+  safeLocalGetString,
+  safeLocalRemove,
+  safeLocalSetRaw,
+} from "../utils/localStorage.ts";
 
 const VAULT_KEY = "muse_master_vault_v1";
 const UNLOCK_KEY = "muse_vault_unlocked_session_v1";
@@ -11,23 +16,6 @@ function safeSessionGet(key: string): string | null {
     return null;
   }
 }
-
-function safeLocalGet(key: string): string | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-export const isVaultUnlockedSignal = signal<boolean>(
-  safeSessionGet(UNLOCK_KEY) === "true",
-);
-
-export const hasMasterPasswordSignal = signal<boolean>(
-  !!safeLocalGet(VAULT_KEY),
-);
 
 function generateSalt(): string {
   const array = new Uint8Array(16);
@@ -55,13 +43,13 @@ export async function setupMasterVault(
 ) {
   const hashedPass = await hashPassword(password);
   const hashedAnswer = await hashPassword(securityAnswer.toLowerCase().trim());
-  localStorage.setItem(VAULT_KEY, `${hashedPass}|${hashedAnswer}`);
+  safeLocalSetRaw(VAULT_KEY, `${hashedPass}|${hashedAnswer}`);
   hasMasterPasswordSignal.value = true;
   unlockVaultSession();
 }
 
 export async function attemptUnlockVault(password: string): Promise<boolean> {
-  const stored = localStorage.getItem(VAULT_KEY);
+  const stored = safeLocalGetString(VAULT_KEY);
   if (!stored) return false;
 
   const [passSection] = stored.split("|");
@@ -79,7 +67,7 @@ export async function recoverMasterVault(
   securityAnswer: string,
   newPassword: string,
 ): Promise<boolean> {
-  const stored = localStorage.getItem(VAULT_KEY);
+  const stored = safeLocalGetString(VAULT_KEY);
   if (!stored) return false;
 
   const parts = stored.split("|");
@@ -95,7 +83,7 @@ export async function recoverMasterVault(
   if (candidateAnswer === answerSection) {
     // Answer is correct, setup new password
     const newHashedPass = await hashPassword(newPassword);
-    localStorage.setItem(VAULT_KEY, `${newHashedPass}|${answerSection}`);
+    safeLocalSetRaw(VAULT_KEY, `${newHashedPass}|${answerSection}`);
     unlockVaultSession();
     return true;
   }
@@ -103,10 +91,18 @@ export async function recoverMasterVault(
 }
 
 export function nukeVault() {
-  localStorage.removeItem(VAULT_KEY);
+  safeLocalRemove(VAULT_KEY);
   hasMasterPasswordSignal.value = false;
   lockVaultSession();
 }
+
+export const isVaultUnlockedSignal = signal<boolean>(
+  safeSessionGet(UNLOCK_KEY) === "true",
+);
+
+export const hasMasterPasswordSignal = signal<boolean>(
+  !!safeLocalGetString(VAULT_KEY),
+);
 
 function unlockVaultSession() {
   isVaultUnlockedSignal.value = true;

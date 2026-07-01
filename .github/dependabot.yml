@@ -1,0 +1,126 @@
+version: 2
+
+# Weekly automated dependency updates. Each ecosystem stays in its lane and
+# opens a single grouped PR per week, mirroring the production spirit:
+# small, reviewable, transparent.
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/frontend-gateway"
+    schedule:
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      fresh-and-preact:
+        patterns:
+          - "preact"
+          - "@preact/*"
+          - "fresh"
+          - "lucide-preact"
+      tooling:
+        patterns:
+          - "tailwindcss"
+          - "qrcode"
+          - "recharts"
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "deps(frontend)"
+      include: "scope"
+
+  - package-ecosystem: "pip"
+    directory: "/ai-engine"
+    schedule:
+      day: "monday"
+      time: "06:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      langchain:
+        patterns:
+          - "langchain"
+          - "langchain-*"
+      web-and-scraping:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "pydantic"
+          - "trafilatura"
+          - "requests"
+          - "beautifulsoup4"
+          - "youtube-transcript-api"
+      parser:
+        patterns:
+          - "unstructured"
+          - "python-multipart"
+    labels:
+      - "dependencies"
+      - "ai-engine"
+    commit-message:
+      prefix: "deps(ai)"
+      include: "scope"
+
+  - package-ecosystem: "cargo"
+    directory: "/blockchain-security"
+    schedule:
+      day: "tuesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      async-runtime:
+        patterns:
+          - "tokio"
+          - "axum"
+      crypto:
+        patterns:
+          - "aes-gcm"
+          - "rand"
+      solana:
+        patterns:
+          - "solana-client"
+          - "solana-sdk"
+    labels:
+      - "dependencies"
+      - "blockchain"
+    commit-message:
+      prefix: "deps(rust)"
+      include: "scope"
+
+  - package-ecosystem: "cargo"
+    directory: "/blockchain-security/contracts"
+    schedule:
+      day: "tuesday"
+      time: "06:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "contracts"
+    commit-message:
+      prefix: "deps(contracts)"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    groups:
+      actions-core:
+        patterns:
+          - "actions/*"
+          - "denoland/*"
+          - "dtolnay/*"
+          - "codecov/*"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"

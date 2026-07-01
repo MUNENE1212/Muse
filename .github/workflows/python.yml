@@ -1,0 +1,78 @@
+name: Python
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ai-engine/**"
+      - ".github/workflows/python.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ai-engine/**"
+      - ".github/workflows/python.yml"
+  workflow_call:
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (ai-engine)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ai-engine/requirements.txt
+
+      - name: Cache Playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('ai-engine/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install system dependencies (tesseract, poppler)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            poppler-utils \
+            tesseract-ocr \
+            libmagic-dev
+
+      - name: Install Python dependencies
+        working-directory: ai-engine
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Install Playwright browsers (if cache miss)
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        working-directory: ai-engine
+        run: playwright install chromium --with-deps
+
+      - name: Run tests with coverage
+        working-directory: ai-engine
+        run: pytest tests/ -v --cov=ai-engine --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ai-engine
+          files: coverage.xml
+          flags: ai-engine
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

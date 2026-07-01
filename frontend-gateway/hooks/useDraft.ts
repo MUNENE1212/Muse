@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import {
+  safeLocalGet,
+  safeLocalRemove,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
 
 /**
  * useDraft — persist form state to localStorage as the user types.
@@ -11,62 +16,56 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
  * - `updateDraft`  : call this with partial form state on every change
  * - `clearDraft`   : call on successful submit or manual discard
  */
+function hasMeaningfulContent(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return !Number.isNaN(value);
+  if (typeof value === "boolean") return value === true;
+  if (Array.isArray(value)) return value.some(hasMeaningfulContent);
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(
+      hasMeaningfulContent,
+    );
+  }
+  return false;
+}
+
 export function useDraft<T extends Record<string, unknown>>(
   storageKey: string,
-) {
+): {
+  draft: T | null;
+  hasDraft: boolean;
+  updateDraft: (partial: Partial<T>) => void;
+  clearDraft: () => void;
+} {
   const [hasDraft, setHasDraft] = useState(false);
   const [draft, setDraft] = useState<T | null>(null);
-  const saveTimer = useRef<number | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load draft from localStorage on mount
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as T;
-        // Only count it as a "real" draft if at least one meaningful field is set
-        const hasContent = Object.values(parsed).some((v) =>
-          typeof v === "string"
-            ? v.trim().length > 0
-            : Array.isArray(v)
-            ? v.length > 0
-            : false
-        );
-        if (hasContent) {
-          setDraft(parsed);
-          setHasDraft(true);
-        }
-      }
-    } catch {
-      // Ignore corrupt storage
+    const parsed = safeLocalGet<T | null>(storageKey, null);
+    if (parsed && Object.values(parsed).some(hasMeaningfulContent)) {
+      setDraft(parsed);
+      setHasDraft(true);
     }
   }, [storageKey]);
 
-  // Debounced save — batches rapid keystrokes into a single write
-  const updateDraft = (partial: Partial<T>) => {
+  const updateDraft = useCallback((partial: Partial<T>) => {
     setDraft((prev) => {
       const next = { ...(prev ?? {}), ...partial } as T;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = globalThis.setTimeout(() => {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // Ignore storage quota errors
-        }
-      }, 400) as unknown as number;
+      saveTimer.current = setTimeout(() => {
+        safeLocalSet(storageKey, next);
+      }, 400);
       return next;
     });
-  };
+  }, [storageKey]);
 
   const clearDraft = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setDraft(null);
     setHasDraft(false);
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      // Ignore
-    }
+    safeLocalRemove(storageKey);
   }, [storageKey]);
 
   return { draft, hasDraft, updateDraft, clearDraft };

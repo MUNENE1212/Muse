@@ -9,21 +9,21 @@ const TRUST_BADGES = [
   },
   {
     name: "4.9 ★ App Store",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     text: "text-white/70",
-    border: "border-white/80/20",
+    border: "border-white/20",
   },
   {
     name: "Featured in Wired",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     text: "text-white/70",
-    border: "border-white/80/20",
+    border: "border-white/20",
   },
   {
     name: "Privacy Certified",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     text: "text-white/70",
-    border: "border-white/80/20",
+    border: "border-white/20",
   },
 ];
 
@@ -83,7 +83,7 @@ export default function LandingHero(
           <button
             type="button"
             onClick={() => onOpenAuth("signup")}
-            className="group px-8 py-4 bg-gradient-to-r from-white/80 to-white/80 text-white font-bold text-sm rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all cursor-pointer"
+            className="group px-8 py-4 bg-gradient-to-r from-white to-white text-white font-bold text-sm rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:shadow-[0_0_50px_rgba(99,102,241,0.5)] transition-all cursor-pointer"
           >
             Get Started
             <Icons.ArrowRight
@@ -108,7 +108,7 @@ export default function LandingHero(
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-7 h-7 rounded-full bg-gradient-to-br from-white/80 to-white/80 border-2 border-[#050508] flex items-center justify-center"
+                  className="w-7 h-7 rounded-full bg-gradient-to-br from-white to-white border-2 border-[#050508] flex items-center justify-center"
                 >
                   <Icons.Aperture size={10} className="text-white" />
                 </div>
@@ -134,7 +134,7 @@ export default function LandingHero(
           {PLATFORMS.map((p) => (
             <div
               key={p.name}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80/10 border border-white/10 backdrop-blur-sm hover:scale-105 transition-transform"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/10 backdrop-blur-sm hover:scale-105 transition-transform"
             >
               <span className="text-xs">{p.icon}</span>
               <span className="text-[10px] font-medium text-gray-400">

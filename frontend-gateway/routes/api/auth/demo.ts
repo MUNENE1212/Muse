@@ -12,6 +12,7 @@ export const handler: Handlers = {
     const headers = new Headers();
     setDemoCookie(headers);
     headers.set("location", "/dashboard");
+    headers.set("Content-Type", "application/json");
     return new Response(null, { status: 303, headers });
   },
 };

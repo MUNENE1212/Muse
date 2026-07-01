@@ -44,8 +44,9 @@ export function EntryDetail({ entry, onBack, onEdit }: EntryDetailProps) {
     day: "numeric",
   });
 
-  const handleVaultUnlock = (password: string) => {
-    if (verifyVaultPassword(entry, password)) {
+  const handleVaultUnlock = async (password: string) => {
+    const ok = await verifyVaultPassword(entry, password);
+    if (ok) {
       setIsUnlocked(true);
       setVaultError(null);
       setIsVaultModalOpen(false);

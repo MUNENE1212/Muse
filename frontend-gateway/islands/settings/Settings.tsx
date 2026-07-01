@@ -38,6 +38,11 @@ import {
   setGlobalFontSize,
   setTheme,
 } from "../../signals/ui.ts";
+import {
+  safeLocalGet,
+  safeLocalRemove,
+  safeLocalSet,
+} from "../../utils/localStorage.ts";
 
 import EmojiInput from "../../components/ui/EmojiInput.tsx";
 import TwoFactorModal from "../modals/TwoFactorModal.tsx";
@@ -387,18 +392,13 @@ export default function Settings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    try {
-      const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
-      if (!raw) {
-        hasInitialized.current = true;
-        return;
-      }
-      const parsed = JSON.parse(raw) as {
-        appearance?: AppearanceSettings;
-        notifications?: NotificationSettings;
-        dataSettings?: DataSettings;
-      };
+    const parsed = safeLocalGet<{
+      appearance?: AppearanceSettings;
+      notifications?: NotificationSettings;
+      dataSettings?: DataSettings;
+    } | null>(STORAGE_KEY, null);
 
+    if (parsed) {
       if (parsed.appearance) {
         setAppearance({ ...DEFAULT_APPEARANCE, ...parsed.appearance });
       }
@@ -408,11 +408,8 @@ export default function Settings() {
       if (parsed.dataSettings) {
         setDataSettings({ ...DEFAULT_DATA_SETTINGS, ...parsed.dataSettings });
       }
-    } catch {
-      // Ignore malformed local settings and use defaults.
-    } finally {
-      hasInitialized.current = true;
     }
+    hasInitialized.current = true;
   }, []);
 
   useEffect(() => {
@@ -436,14 +433,7 @@ export default function Settings() {
     setSaveStatus("saving");
 
     saveTimer.current = setTimeout(() => {
-      try {
-        globalThis.localStorage?.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ appearance, notifications, dataSettings }),
-        );
-      } catch {
-        // Best effort persistence.
-      }
+      safeLocalSet(STORAGE_KEY, { appearance, notifications, dataSettings });
 
       setSaveStatus("saved");
       hideSavedTimer.current = setTimeout(() => setSaveStatus("idle"), 1800);
@@ -605,7 +595,7 @@ export default function Settings() {
     ) ?? false;
     if (!shouldDelete) return;
 
-    globalThis.localStorage?.removeItem(STORAGE_KEY);
+    safeLocalRemove(STORAGE_KEY);
 
     resetRooms();
     resetItems();

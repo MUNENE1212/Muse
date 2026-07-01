@@ -1,8 +1,10 @@
 {
   "unstable": ["kv"],
-  "lock": false,
+  "lock": true,
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check **/*.ts && deno check **/*.tsx",
+    "test": "deno test --allow-all",
+    "coverage": "deno test --allow-all --coverage=coverage/",
     "cli": "echo \"import '\\$fresh/src/dev/cli.ts'\" | deno run --unstable -A -",
     "manifest": "deno task cli manifest $(pwd)",
     "start": "deno run -A --unstable-kv --watch=static/,routes/ dev.ts",

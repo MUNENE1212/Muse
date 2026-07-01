@@ -106,40 +106,32 @@ export const loadMirrorStats = (userId: string) => {
     error: null,
   };
 
-  try {
-    const journals = journalSignal.value;
-    const rooms = roomsSignal.value;
-    const threads = threadsSignal.value;
+  const journals = journalSignal.value;
+  const rooms = roomsSignal.value;
+  const threads = threadsSignal.value;
 
-    const followerHistory = [...Array(7)].map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      return {
-        date: d.toLocaleDateString("en-US", { weekday: "short" }),
-        count: 120 + i * 5 + Math.floor(Math.random() * 10),
-      };
-    });
+  const followerHistory = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return {
+      date: d.toLocaleDateString("en-US", { weekday: "short" }),
+      count: 120 + i * 5 + Math.floor(Math.random() * 10),
+    };
+  });
 
-    mirrorSignal.value = {
-      ...initialState,
-      stats: {
-        views: journals.length * 15 + threads.length * 20,
-        likes: journals.filter((j) => j.isFavorited).length * 5,
-        comments: threads.length * 3,
-        collaborations: rooms.length * 2,
-        follows: 156,
-        circleJoins: rooms.length,
-      },
-      followerHistory,
-      isLoading: false,
-    };
-  } catch (err) {
-    mirrorSignal.value = {
-      ...mirrorSignal.value,
-      error: err instanceof Error ? err.message : "Unknown error",
-      isLoading: false,
-    };
-  }
+  mirrorSignal.value = {
+    ...initialState,
+    stats: {
+      views: journals.length * 15 + threads.length * 20,
+      likes: journals.filter((j) => j.isFavorited).length * 5,
+      comments: threads.length * 3,
+      collaborations: rooms.length * 2,
+      follows: 156,
+      circleJoins: rooms.length,
+    },
+    followerHistory,
+    isLoading: false,
+  };
 };
 
 export const refreshMirrorStats = (userId: string) => {

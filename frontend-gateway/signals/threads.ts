@@ -1,4 +1,9 @@
 import { signal } from "@preact/signals";
+import {
+  safeLocalGet,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
+import { generateSafeId } from "../utils/safeId.ts";
 
 export type ThreadMood = string;
 
@@ -135,29 +140,16 @@ const INITIAL_THREADS: Thread[] = [
 ];
 
 function loadThreads(): Thread[] {
-  if (typeof localStorage === "undefined") return INITIAL_THREADS;
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return INITIAL_THREADS;
-    const parsed = JSON.parse(stored) as Thread[];
-    return Array.isArray(parsed) ? parsed : INITIAL_THREADS;
-  } catch {
-    return INITIAL_THREADS;
-  }
+  const stored = safeLocalGet<Thread[] | null>(STORAGE_KEY, null);
+  if (Array.isArray(stored) && stored.length > 0) return stored;
+  return INITIAL_THREADS;
 }
 
 export const threadsSignal = signal<Thread[]>(loadThreads());
 
-if (typeof localStorage !== "undefined") {
-  threadsSignal.subscribe((threads: Thread[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
-    } catch {
-      // Ignore storage write errors (readonly or restricted environments)
-    }
-  });
-}
+threadsSignal.subscribe((threads: Thread[]) => {
+  safeLocalSet(STORAGE_KEY, threads);
+});
 
 export function addThread(
   thread: Omit<
@@ -169,7 +161,7 @@ export function addThread(
     | "dialogueLayers"
   >,
 ) {
-  const newId = "t" + (threadsSignal.value.length + 1);
+  const newId = generateSafeId("t");
   const newThread: Thread = {
     ...thread,
     id: newId,
@@ -190,7 +182,7 @@ export function addDialogueLayer(
     if (t.id === threadId) {
       const newLayer: DialogueLayer = {
         ...layer,
-        id: "d" + (t.dialogueLayers.length + 1),
+        id: generateSafeId("d"),
         resonanceScore: 0,
         timestamp: new Date().toISOString(),
       };

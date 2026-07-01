@@ -1,4 +1,8 @@
 import { signal } from "@preact/signals";
+import {
+  safeLocalGetString,
+  safeLocalSetRaw,
+} from "../utils/localStorage.ts";
 
 export interface ResonanceMetrics {
   views: number;
@@ -109,13 +113,11 @@ export const soloModeSignal = signal(false);
 
 // Tracks whether the user has dismissed the setup banner in this session
 export const setupBannerDismissedSignal = signal(
-  globalThis.localStorage?.getItem("muse-setup-dismissed") === "true",
+  safeLocalGetString("muse-setup-dismissed") === "true",
 );
 
 export function dismissSetupBanner() {
-  try {
-    globalThis.localStorage?.setItem("muse-setup-dismissed", "true");
-  } catch { /* noop */ }
+  safeLocalSetRaw("muse-setup-dismissed", "true");
   setupBannerDismissedSignal.value = true;
 }
 
