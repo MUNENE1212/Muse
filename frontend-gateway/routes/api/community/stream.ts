@@ -3,26 +3,56 @@ import { queryDB } from "../../../utils/db.ts";
 import { getSessionUser, isDemoUser } from "../../../utils/auth.ts";
 import { DEMO_STREAM } from "../../../utils/demo_data.ts";
 
+interface StreamRow {
+  id: string;
+  content: string;
+  tags: string[] | null;
+  mood: string | null;
+  timestamp: string;
+  author_name: string | null;
+  author_avatar: string | null;
+}
+
+const json = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+
+function safeIsoTimestamp(value: unknown): string {
+  if (typeof value !== "string" || !value) return new Date().toISOString();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? new Date().toISOString()
+    : parsed.toISOString();
+}
+
+function normalizeTags(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((t): t is string => typeof t === "string")
+    : [];
+}
+
+function fallbackAvatar(seed: string): string {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+    encodeURIComponent(seed)
+  }`;
+}
+
 export const handler: Handlers = {
   async GET(_req) {
-    const _userId = await getSessionUser(_req);
-
-    // Demo mode — return template stream immediately
-    if (isDemoUser(_userId)) {
-      return new Response(JSON.stringify({ stream: DEMO_STREAM }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+    const userId = await getSessionUser(_req);
+    if (isDemoUser(userId)) {
+      return json({ stream: DEMO_STREAM }, 200);
     }
-    // In production, we select public journal entries across all users
-    // We join with the users table to get the author's details.
+
     const query = `
-      SELECT 
-        j.id, 
-        j.raw_thought as content, 
-        j.tags, 
-        j.mood, 
-        j.created_at as timestamp, 
+      SELECT
+        j.id,
+        j.raw_thought as content,
+        j.tags,
+        j.mood,
+        j.created_at as timestamp,
         u.username as author_name,
         u.avatar_url as author_avatar
       FROM journal_entries j
@@ -33,50 +63,31 @@ export const handler: Handlers = {
     `;
 
     try {
-      const rawEntries = await queryDB(query);
+      const rows = await queryDB<StreamRow>(query);
 
-      const stream = rawEntries.map((e: unknown) => {
-        const entry = e as Record<string, unknown>;
-        const authorName = typeof entry.author_name === "string"
-          ? entry.author_name
-          : "Anonymous";
-        const authorAvatar = typeof entry.author_avatar === "string" &&
-            entry.author_avatar.length > 0
-          ? entry.author_avatar
-          : "https://api.dicebear.com/7.x/avataaars/svg?seed=" + authorName;
-        const timestampRaw = entry.timestamp;
-        const timestamp = timestampRaw
-          ? new Date(timestampRaw as string).toISOString()
-          : new Date().toISOString();
+      const stream = rows.map((entry) => {
+        const authorName = entry.author_name ?? "Anonymous";
+        const authorAvatar = entry.author_avatar ?? fallbackAvatar(authorName);
         return {
           id: entry.id,
           author: {
             name: authorName,
             avatar: authorAvatar,
-            aura: entry.mood || "reflective", // Map mood to aura color for UI
+            aura: entry.mood || "reflective",
           },
           content: entry.content,
-          timestamp,
-          tags: entry.tags || [],
-          // Mocking alignment and challenge counts for now until we build interaction tables
+          timestamp: safeIsoTimestamp(entry.timestamp),
+          tags: normalizeTags(entry.tags),
+          // demoData: random counts until interaction tables exist
           alignCount: Math.floor(Math.random() * 50),
           challengeCount: Math.floor(Math.random() * 10),
         };
       });
 
-      return new Response(JSON.stringify({ stream }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return json({ stream }, 200);
     } catch (error: unknown) {
       console.error("Failed to fetch thought stream:", error);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch stream" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      return json({ error: "Failed to fetch stream" }, 500);
     }
   },
 };

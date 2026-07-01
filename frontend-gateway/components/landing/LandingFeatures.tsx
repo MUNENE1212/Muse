@@ -4,7 +4,7 @@ const PHASES = [
   {
     icon: Icons.Compass,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Consume",
     subtitle: "What you take in",
     description:
@@ -14,7 +14,7 @@ const PHASES = [
   {
     icon: Icons.Brain,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Contemplate",
     subtitle: "What it reveals",
     description:
@@ -24,7 +24,7 @@ const PHASES = [
   {
     icon: Icons.PenTool,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Create",
     subtitle: "What you make",
     description:
@@ -37,7 +37,7 @@ const FEATURES = [
   {
     icon: Icons.Compass,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Aggregate Everything",
     description:
       "Connect Spotify, TikTok, Pinterest, YouTube, Twitter. Muse sees what you consume across all platforms.",
@@ -45,7 +45,7 @@ const FEATURES = [
   {
     icon: Icons.Network,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Find Your Patterns",
     description:
       "Discover the meta-themes, aesthetics, and tensions that run through everything you save and watch.",
@@ -53,7 +53,7 @@ const FEATURES = [
   {
     icon: Icons.Eye,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Know Yourself Honestly",
     description:
       "Your consumption fingerprint doesn't lie. Muse shows you who you actually are, not who you perform.",
@@ -61,7 +61,7 @@ const FEATURES = [
   {
     icon: Icons.PenTool,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Create From Yourself",
     description:
       "Start writing, making, or sharing with your own voice, aesthetic, and themes already primed.",
@@ -77,7 +77,7 @@ const FEATURES = [
   {
     icon: Icons.Shield,
     color: "text-white/70",
-    bg: "bg-white/80/10",
+    bg: "bg-white/10",
     title: "Privacy First",
     description:
       "Your data stays yours. You control exactly what becomes visible in your public portrait.",
@@ -180,7 +180,7 @@ export default function LandingFeatures() {
       {/* Three Phases */}
       <section className="py-28 px-6 md:px-12 max-w-6xl mx-auto z-20 relative">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80/10 border border-white/80/20 mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 mb-4">
             <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider">
               The Creative Loop
             </span>
@@ -220,7 +220,7 @@ export default function LandingFeatures() {
       {/* Featured Insights */}
       <section className="py-20 px-6 md:px-12 max-w-6xl mx-auto z-20 relative">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80/10 border border-white/80/20 mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 mb-4">
             <Icons.Brain size={12} className="text-white/70" />
             <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider">
               Real patterns from real users
@@ -237,7 +237,7 @@ export default function LandingFeatures() {
           {FEATURED_INSIGHTS.map((insight) => (
             <div
               key={insight.title}
-              className="min-w-[220px] md:min-w-[240px] snap-start p-4 rounded-xl bg-gradient-to-br from-white/[0.02] to-white/[0.01] border border-white/5 hover:border-white/80/30 transition-all cursor-pointer group backdrop-blur-sm hover:shadow-lg hover:translate-y-[-5px]"
+              className="min-w-[220px] md:min-w-[240px] snap-start p-4 rounded-xl bg-gradient-to-br from-white/[0.02] to-white/[0.01] border border-white/5 hover:border-white/30 transition-all cursor-pointer group backdrop-blur-sm hover:shadow-lg hover:translate-y-[-5px]"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[9px] font-mono text-gray-600">
@@ -257,9 +257,9 @@ export default function LandingFeatures() {
 
       {/* Muse Card Preview */}
       <section className="py-20 px-6 md:px-12 max-w-6xl mx-auto z-20 relative">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white/80/20 via-white/80/10 to-transparent border border-white/80/30 p-8 md:p-12 backdrop-blur-sm">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white/80/20 blur-[100px] rounded-full opacity-30" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-white/80/20 blur-[100px] rounded-full opacity-20" />
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white/20 via-white/10 to-transparent border border-white/30 p-8 md:p-12 backdrop-blur-sm">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/20 blur-[100px] rounded-full opacity-30" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-white/20 blur-[100px] rounded-full opacity-20" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-6">
               <Icons.Share2 size={24} className="text-white/70" />
@@ -298,7 +298,7 @@ export default function LandingFeatures() {
               <div className="bg-white/[0.03] border border-white/10 rounded-xl p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/80 to-white/80 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white to-white flex items-center justify-center">
                       <span className="text-white font-bold text-[10px]">
                         M
                       </span>
@@ -363,7 +363,7 @@ export default function LandingFeatures() {
           {TESTIMONIALS.map((t) => (
             <div
               key={t.author}
-              className="min-w-[260px] md:min-w-[300px] snap-start p-6 rounded-xl bg-gradient-to-br from-white/[0.02] to-white/[0.01] border border-white/5 hover:border-white/80/30 transition-all backdrop-blur-sm hover:shadow-lg hover:translate-y-[-5px]"
+              className="min-w-[260px] md:min-w-[300px] snap-start p-6 rounded-xl bg-gradient-to-br from-white/[0.02] to-white/[0.01] border border-white/5 hover:border-white/30 transition-all backdrop-blur-sm hover:shadow-lg hover:translate-y-[-5px]"
             >
               <div className="flex gap-1 mb-3">
                 {[...Array(t.rating)].map((_, j) => (
@@ -387,7 +387,7 @@ export default function LandingFeatures() {
       {/* Final CTA */}
       <section className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6 py-20 z-20 relative">
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80/10 border border-white/80/20 mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 mb-6">
             <Icons.Zap size={10} className="text-white/70" />
             <span className="text-[9px] font-bold text-white/70 uppercase tracking-wider">
               Limited early access

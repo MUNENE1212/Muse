@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import * as Icons from "lucide-preact";
 
+const GLOBAL_STYLES_ID = "muse-spectral-hero-keyframes";
+
 export default function SpectralHero(
   {
     onOpenAuth,
@@ -14,6 +16,25 @@ export default function SpectralHero(
 ) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.getElementById(GLOBAL_STYLES_ID)) return;
+
+    const style = document.createElement("style");
+    style.id = GLOBAL_STYLES_ID;
+    style.textContent = `
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes spin-reverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -168,21 +189,4 @@ export default function SpectralHero(
       </div>
     </section>
   );
-}
-
-const globalStyles = `
-  @keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  @keyframes spin-reverse {
-    from { transform: rotate(360deg); }
-    to { transform: rotate(0deg); }
-  }
-`;
-
-if (typeof document !== "undefined") {
-  const style = document.createElement("style");
-  style.textContent = globalStyles;
-  document.head.appendChild(style);
 }
