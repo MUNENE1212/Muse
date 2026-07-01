@@ -1,5 +1,10 @@
 import { signal } from "@preact/signals";
 import { removeItemFromThread, threadsSignal } from "./threads.ts";
+import {
+  safeLocalGet,
+  safeLocalSet,
+} from "../utils/localStorage.ts";
+import { generateSafeId } from "../utils/safeId.ts";
 
 export interface Item {
   id: string;
@@ -69,36 +74,23 @@ const INITIAL_ITEMS: Item[] = [
 ];
 
 function loadItems(): Item[] {
-  if (typeof localStorage === "undefined") return INITIAL_ITEMS;
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return INITIAL_ITEMS;
-    const parsed = JSON.parse(stored) as Item[];
-    return Array.isArray(parsed) ? parsed : INITIAL_ITEMS;
-  } catch {
-    return INITIAL_ITEMS;
-  }
+  const stored = safeLocalGet<Item[] | null>(STORAGE_KEY, null);
+  if (Array.isArray(stored) && stored.length > 0) return stored;
+  return INITIAL_ITEMS;
 }
 
 export const itemsSignal = signal<Item[]>(loadItems());
 
-if (typeof localStorage !== "undefined") {
-  itemsSignal.subscribe((items: Item[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      // ignore write errors in restricted environments
-    }
-  });
-}
+itemsSignal.subscribe((items: Item[]) => {
+  safeLocalSet(STORAGE_KEY, items);
+});
 
 export function addItem(
   item: Omit<Item, "id" | "createdAt" | "dataProvenance">,
 ) {
   const newItem: Item = {
     ...item,
-    id: "i" + (itemsSignal.value.length + 1),
+    id: generateSafeId("i"),
     createdAt: new Date().toISOString(),
     dataProvenance: {
       platform: item.sourceUrl.includes("x.com") ? "X" : "Web",

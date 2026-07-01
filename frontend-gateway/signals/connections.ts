@@ -220,10 +220,6 @@ export const perspectivesSignal = signal<Perspective[]>([
   },
 ]);
 
-export function joinCircle(id: string) {
-  console.log(`Joining circle: ${id}`);
-}
-
 export function submitPerspective(
   content: string,
   targetId?: string,

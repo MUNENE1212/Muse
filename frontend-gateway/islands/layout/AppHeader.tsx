@@ -8,18 +8,19 @@ import {
 } from "../../signals/user.ts";
 import { resonanceModeSignal } from "../../signals/resonance.ts";
 import {
-  AppNotification,
   appThemeSignal,
   closeNotifications,
   initializeTheme,
   isNotificationsOpenSignal,
-  markAllNotificationsRead,
-  markNotificationRead,
-  notificationsSignal,
   toggleMenu,
   toggleNotifications,
   toggleTheme,
 } from "../../signals/ui.ts";
+import {
+  markAllAsRead,
+  markAsRead,
+  notificationSignal,
+} from "../../signals/notifications.ts";
 
 const { Moon, Circle, CloudSun, Sun, Bell, Menu } = Icons as unknown as Record<
   string,
@@ -32,9 +33,7 @@ export default function AppHeader(
 ) {
   const isNotificationsOpen = isNotificationsOpenSignal.value;
   const currentTheme = appThemeSignal.value;
-  const notifications = notificationsSignal.value;
-  const unreadCount =
-    notifications.filter((n: AppNotification) => !n.isRead).length;
+  const { notifications, unreadCount } = notificationSignal.value;
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const [showLogoModal, setShowLogoModal] = useState(false);
 
@@ -186,7 +185,7 @@ export default function AppHeader(
                     </h4>
                     <button
                       type="button"
-                      onClick={markAllNotificationsRead}
+                      onClick={markAllAsRead}
                       className="text-[9px] font-bold uppercase text-[var(--muse-muted)] hover:text-[var(--muse-text)] transition-colors duration-300"
                     >
                       Dismiss All
@@ -203,14 +202,14 @@ export default function AppHeader(
                         <button
                           type="button"
                           key={n.id}
-                          onClick={() => markNotificationRead(n.id)}
+                          onClick={() => markAsRead(n.id)}
                           className="w-full p-6 text-left border-b border-[var(--muse-border)] hover:bg-[var(--muse-surface-soft)] transition-colors duration-300"
                         >
                           <p className="text-sm font-bold text-[var(--muse-text)] mb-1">
                             {n.title}
                           </p>
                           <p className="text-[11px] text-[var(--muse-muted)] leading-relaxed">
-                            {n.detail}
+                            {n.message}
                           </p>
                         </button>
                       ))}
