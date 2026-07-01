@@ -1,0 +1,8 @@
+deno_out.log
+_fresh/
+node_modules/
+.git/
+.env*
+tests/
+docs/
+*.md

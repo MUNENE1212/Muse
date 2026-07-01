@@ -1,5 +1,7 @@
 # Muse Collective 3.0: The Industrial-Grade Intelligence Loop
 
+[![CI](https://github.com/kagz-01/Muse/actions/workflows/ci.yml/badge.svg)](https://github.com/kagz-01/Muse/actions/workflows/ci.yml)
+
 **Muse** is a sovereign knowledge environment designed to transform raw consumption into collective intelligence. It replaces passive data storage with a proactive **Synthesis Engine**, allowing users to capture signals, contemplate patterns, and broadcast immutable thoughts to a global collective.
 
 ## 🌀 The Loop: Your Cognitive Workflow (Day 1 Journey)
@@ -90,6 +92,48 @@ The app will be available at `http://localhost:8000`
 - **Lazy Loading**: Components load on-demand via Intersection Observers.
 - **API Response Caching**: Intelligent TTL-based caching reduces network calls (`utils/cache.ts`).
 - **Animation Optimization**: RequestAnimationFrame (RAF) throttling for smooth 60fps performance on cubic-bezier animations.
+
+## 🧪 Contributing
+
+We welcome pull requests. The Muse project is built in the spirit of
+**ubuntu** — *"I am because we are."* Every contribution, from a typo fix
+to a new synthesis engine, strengthens the collective.
+
+Before opening a PR, please read **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
+It covers the dev environment, the test suite, the PR process, and links
+to the per-area agent skills in `.agent/skills/`.
+
+A few quick entry points:
+
+| What you want to do | Where to look |
+| --- | --- |
+| Touch a Fresh island or component | `frontend-gateway/islands/`, `frontend-gateway/components/` |
+| Add a new API route | `frontend-gateway/routes/api/` |
+| Tweak the AI scrapers / synthesizer | `ai-engine/scrapers/`, `ai-engine/synthesizer.py` |
+| Work on the Solana / crypto node | `blockchain-security/src/`, `blockchain-security/contracts/` |
+| Update CI, dependabot, or templates | `.github/` |
+| Update docs | `docs/` |
+
+## 🚢 Deployment
+
+The full production stack — `frontend-gateway`, `ai-engine`, and
+`blockchain-security` — is currently shaped for **Render** (see
+`render.yaml`) with a managed **PostgreSQL** instance for persistent
+data. Local reproduction is one command:
+
+```bash
+docker-compose up --build
+```
+
+The `ai-engine` Dockerfile installs Playwright + Chromium, Tesseract OCR,
+and Poppler, so the first build pulls a few hundred MB of system
+packages — budget for it.
+
+> **Heads up:** production deploy needs two more pieces before it is
+> non-trivial: a managed Postgres URL injected via `DATABASE_URL` and a
+> long-lived secret for the `OPENAI_API_KEY` used by the synthesizer.
+> Both should be added to the Render service's environment, **never**
+> to the repository.
 
 ## 🔐 Security Roadmap (Moving to Production)
 
