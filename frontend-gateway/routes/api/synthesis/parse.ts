@@ -8,98 +8,156 @@ interface LinkParseResult {
   type: "article" | "image" | "video" | "document" | "unknown";
 }
 
-// Mock link parser - in production, would use a library like metascraper or open-graph-scraper
-const parseLinkMetadata = (url: string): Promise<LinkParseResult> => {
-  try {
-    const urlObj = new URL(url);
-    const domain = urlObj.hostname;
+function jsonResponse(body: Record<string, unknown>, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
-    // Mock responses for common domains for demo
-    const mockResponses: Record<string, LinkParseResult> = {
-      "github.com": {
-        title: "GitHub: The Complete Developer Platform",
-        description:
-          "GitHub is the complete developer platform to build, scale, and deliver secure software.",
-        url,
-        source: domain,
-        type: "article",
-        image:
-          "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-      },
-      "medium.com": {
-        title: "Medium – Where good ideas find you.",
-        description:
-          "Take part in our community of millions of writers. Read, write, and share stories that matter.",
-        url,
-        source: domain,
-        type: "article",
-      },
-      "youtube.com": {
-        title: "YouTube",
-        description:
-          "Enjoy the videos and music you love, upload original content, and share it all with friends.",
-        url,
-        source: domain,
-        type: "video",
-      },
-      "twitter.com": {
-        title: "X. It's what's happening",
-        description:
-          "From breaking news and entertainment to sports and politics.",
-        url,
-        source: domain,
-        type: "article",
-      },
-    };
+const HOST_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    // Check if domain matches any mock
-    for (const [mockDomain, response] of Object.entries(mockResponses)) {
-      if (domain.includes(mockDomain)) {
-        return Promise.resolve(response);
-      }
-    }
+const BLOCKED_HOSTS = ["x.com", "twitter.com", "linkedin.com"];
 
-    // Generic fallback for unknown URLs
-    return Promise.resolve({
-      title: urlObj.hostname,
-      description: "Link content",
-      url,
-      source: domain,
-      type: "unknown",
-    });
-  } catch (_err) {
-    throw new Error("Invalid URL provided");
+function classifyType(hostname: string): LinkParseResult["type"] {
+  if (hostname.includes("youtube.com") || hostname.includes("vimeo.com")) {
+    return "video";
   }
-};
+  if (hostname.includes("github.com")) return "document";
+  if (
+    /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(hostname)
+  ) {
+    return "image";
+  }
+  return "article";
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function extractTag(html: string, regex: RegExp): string {
+  const match = html.match(regex);
+  if (!match || !match[1]) return "";
+  return decodeEntities(match[1].trim());
+}
+
+async function fetchHtml(url: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": HOST_UA,
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Upstream responded ${response.status}`);
+  }
+  return await response.text();
+}
+
+async function parseLinkMetadata(
+  url: string,
+): Promise<LinkParseResult> {
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (!/^https?:$/.test(target.protocol)) {
+    throw new Error("Only http(s) URLs are supported");
+  }
+
+  const hostname = target.hostname.toLowerCase();
+
+  if (BLOCKED_HOSTS.some((h) => hostname.includes(h))) {
+    throw new Error(
+      `Source ${hostname} blocks server-side requests; paste the content directly.`,
+    );
+  }
+
+  const html = await fetchHtml(target.toString());
+
+  const title = extractTag(
+      html,
+      /<meta[^>]*property=["']og:title["'][^>]*content=["'](.*?)["']/i,
+    ) ||
+    extractTag(
+      html,
+      /<meta[^>]*name=["']twitter:title["'][^>]*content=["'](.*?)["']/i,
+    ) ||
+    extractTag(/<title[^>]*>(.*?)<\/title>/i);
+
+  const description = extractTag(
+      html,
+      /<meta[^>]*property=["']og:description["'][^>]*content=["'](.*?)["']/i,
+    ) ||
+    extractTag(
+      html,
+      /<meta[^>]*name=["']description["'][^>]*content=["'](.*?)["']/i,
+    ) ||
+    extractTag(
+      html,
+      /<meta[^>]*name=["']twitter:description["'][^>]*content=["'](.*?)["']/i,
+    );
+
+  const image = extractTag(
+    html,
+    /<meta[^>]*property=["']og:image["'][^>]*content=["'](.*?)["']/i,
+  ) ||
+    extractTag(
+      html,
+      /<meta[^>]*name=["']twitter:image["'][^>]*content=["'](.*?)["']/i,
+    );
+
+  const favicon = extractTag(
+    html,
+    /<link[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["'](.*?)["']/i,
+  );
+
+  if (!title) {
+    throw new Error("Could not extract a title from the page");
+  }
+
+  return {
+    title,
+    description,
+    image: image || undefined,
+    url: target.toString(),
+    source: hostname,
+    favicon: favicon || undefined,
+    type: classifyType(hostname),
+  };
+}
 
 export const handler = async (req: Request) => {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-    });
+    return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
   try {
-    const { url } = await req.json();
+    const body = await req.json();
+    const url = typeof body?.url === "string" ? body.url.trim() : "";
 
     if (!url) {
-      return new Response(JSON.stringify({ error: "URL required" }), {
-        status: 400,
-      });
+      return jsonResponse({ error: "URL required" }, 400);
     }
 
     const metadata = await parseLinkMetadata(url);
 
-    return new Response(JSON.stringify(metadata), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(metadata as unknown as Record<string, unknown>, 200);
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : "Failed to parse link",
-      }),
-      { status: 400 },
-    );
+    const message = err instanceof Error
+      ? err.message
+      : "Failed to parse link";
+    return jsonResponse({ error: message }, 400);
   }
 };

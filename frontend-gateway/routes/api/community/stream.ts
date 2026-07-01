@@ -37,17 +37,26 @@ export const handler: Handlers = {
 
       const stream = rawEntries.map((e: unknown) => {
         const entry = e as Record<string, unknown>;
+        const authorName = typeof entry.author_name === "string"
+          ? entry.author_name
+          : "Anonymous";
+        const authorAvatar = typeof entry.author_avatar === "string" &&
+            entry.author_avatar.length > 0
+          ? entry.author_avatar
+          : "https://api.dicebear.com/7.x/avataaars/svg?seed=" + authorName;
+        const timestampRaw = entry.timestamp;
+        const timestamp = timestampRaw
+          ? new Date(timestampRaw as string).toISOString()
+          : new Date().toISOString();
         return {
           id: entry.id,
           author: {
-            name: entry.author_name || "Anonymous",
-            avatar: entry.author_avatar ||
-              "https://api.dicebear.com/7.x/avataaars/svg?seed=" +
-                entry.author_name,
+            name: authorName,
+            avatar: authorAvatar,
             aura: entry.mood || "reflective", // Map mood to aura color for UI
           },
           content: entry.content,
-          timestamp: new Date(entry.timestamp as string).toISOString(),
+          timestamp,
           tags: entry.tags || [],
           // Mocking alignment and challenge counts for now until we build interaction tables
           alignCount: Math.floor(Math.random() * 50),
@@ -61,9 +70,13 @@ export const handler: Handlers = {
       });
     } catch (error: unknown) {
       console.error("Failed to fetch thought stream:", error);
-      return new Response(JSON.stringify({ error: "Failed to fetch stream" }), {
-        status: 500,
-      });
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch stream" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   },
 };

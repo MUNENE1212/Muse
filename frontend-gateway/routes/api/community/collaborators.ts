@@ -17,9 +17,13 @@ export const handler: Handlers = {
       );
     }
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     try {
@@ -27,8 +31,8 @@ export const handler: Handlers = {
       // For now, we will select random users to simulate the network
       const users = await queryDB(
         `
-        SELECT id, username, email, avatar_url 
-        FROM users 
+        SELECT id, username, email, avatar_url
+        FROM users
         WHERE id != $1
         LIMIT 10
       `,
@@ -37,11 +41,16 @@ export const handler: Handlers = {
 
       const collaborators = users.map((e: unknown, i: number) => {
         const u = e as Record<string, unknown>;
+        const email = typeof u.email === "string" ? u.email : null;
+        const fallbackName = email ? email.split("@")[0] : `explorer-${i}`;
+        const username = typeof u.username === "string"
+          ? u.username
+          : fallbackName;
         return {
           id: u.id,
-          name: u.username || (u.email as string).split("@")[0],
+          name: u.username || fallbackName,
           avatar: u.avatar_url ||
-            "https://api.dicebear.com/7.x/avataaars/svg?seed=" + u.username,
+            "https://api.dicebear.com/7.x/avataaars/svg?seed=" + username,
           role: ["Synthesizer", "Architect", "Challenger", "Observer"][i % 4],
           status: ["Online", "Reflecting", "Deep Focus", "Offline"][i % 4],
           bio: "Exploring the intersections of systems and human thought.",
@@ -64,6 +73,7 @@ export const handler: Handlers = {
         JSON.stringify({ error: "Failed to fetch collaborators" }),
         {
           status: 500,
+          headers: { "Content-Type": "application/json" },
         },
       );
     }
