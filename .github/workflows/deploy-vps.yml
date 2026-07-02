@@ -43,8 +43,14 @@ jobs:
 
       - name: Run deploy
         run: |
+          # Run the deploy-muse.sh script that lives on the VPS at a
+          # stable path (not inside the repo). This script is the
+          # single source of truth for our compose stack and was
+          # written to match the production setup (no Caddy, no
+          # blockchain-security, no host-port publish on postgres,
+          # ai-engine mapped to 127.0.0.1:18001).
           ssh ${{ vars.VPS_USER }}@${{ vars.VPS_HOST }} \
-            "/opt/muse/repo/deploy/scripts/deploy.sh"
+            "sudo bash /opt/muse/deploy/deploy-muse.sh"
 
       - name: Health check
         run: |
