@@ -3,15 +3,22 @@ import { PromptTemplate } from "npm:@langchain/core/prompts";
 import { StructuredOutputParser } from "npm:@langchain/core/output_parsers";
 import { z } from "npm:zod";
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
+function getGroqAPIKey(): string {
+  const key = Deno.env.get("GROQ_API_KEY") || "";
+  if (!key || key === "placeholder-not-set") {
+    throw new Error("GROQ_API_KEY is not configured in the environment.");
+  }
+  return key;
+}
 
-// Initialize the Groq model via LangChain
-// llama-3.3-70b-versatile is Groq's flagship fast model, great for structured output
-const model = new ChatGroq({
-  apiKey: GROQ_API_KEY,
-  model: "llama-3.3-70b-versatile",
-  temperature: 0.2,
-});
+// Lazy initialization function
+function getModel() {
+  return new ChatGroq({
+    apiKey: getGroqAPIKey(),
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.2,
+  });
+}
 
 // Define the blueprint structure we expect from the AI
 const blueprintSchema = z.object({
@@ -62,7 +69,7 @@ export async function synthesizeArtifacts(
   });
 
   // Call Groq via LangChain
-  const response = await model.invoke(promptValue);
+  const response = await getModel().invoke(promptValue);
 
   // Parse the structured JSON output
   try {
@@ -114,7 +121,7 @@ export async function generateDynamicSocraticQuestion(
     context_text: contextText,
   });
 
-  const response = await model.invoke(promptValue);
+  const response = await getModel().invoke(promptValue);
   let question = response.content.toString().trim();
 
   // Clean up any stray quotes if the AI included them
