@@ -9,8 +9,8 @@ RUN deno cache deno.json || true
 COPY . .
 
 # Build Fresh assets (compiles Tailwind CSS)
-# Set a dummy DATABASE_URL for build time (Fresh build imports some files that check for DB)
-ARG DATABASE_URL=dummy://build
+# Set a dummy DATABASE_URL for build time (postgres:// format required)
+ARG DATABASE_URL=postgres://user:pass@localhost:5432/dbname
 ENV DATABASE_URL=${DATABASE_URL}
 RUN deno run -A --unstable-kv dev.ts build
 
