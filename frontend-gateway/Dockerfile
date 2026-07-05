@@ -9,6 +9,8 @@ RUN deno cache deno.json || true
 COPY . .
 
 # Build Fresh assets (compiles Tailwind CSS)
+# Set a dummy DATABASE_URL for build time
+ARG DATABASE_URL=dummy://build
 RUN deno run -A --unstable-kv dev.ts build
 
 EXPOSE 8000
