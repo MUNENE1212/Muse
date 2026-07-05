@@ -1,36 +1,22 @@
-import hashlib
+# ============================================
+# MUSE AI Engine - Main Application (With Caching)
+# ============================================
+# This version includes Redis caching for all expensive operations
+# ============================================
+
 import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from scrapers import scrape_webpage, scrape_youtube_transcript, scrape_social_media, parse_document
 from database import get_room_artifacts, save_threads, init_pool, close_pool
 from synthesizer import synthesize_artifacts
 from url_safety import UnsafeURLError, resolve_url
-
-# Cache integration
-try:
-    from cache import (
-        get_with_fallback,
-        set_with_fallback,
-        close_cache,
-        invalidate_pattern,
-        get_cache_stats,
-        flush_cache,
-    )
-    CACHE_AVAILABLE = True
-except ImportError:
-    CACHE_AVAILABLE = False
-    async def close_cache(): pass
-    async def invalidate_pattern(pattern): return 0
-    async def get_cache_stats(): return {"status": "unavailable"}
-    async def flush_cache(): return False
-    async def get_with_fallback(key): return None
-    async def set_with_fallback(key, value, ttl): return False
+from cache import cached, cached_scrape, cached_social_scrape, cached_youtube, cached_document, close_cache, invalidate_pattern
 
 
 logger = logging.getLogger("muse.ai_engine")
@@ -56,19 +42,17 @@ def _configure_logging() -> None:
 async def lifespan(app: FastAPI):
     _configure_logging()
     logger.info("Starting Muse AI Engine")
-    if CACHE_AVAILABLE:
-        logger.info("Cache layer enabled")
     try:
         await init_pool()
         logger.info("Database pool initialized")
     except Exception as exc:
         logger.warning("Database pool init skipped: %s", exc)
-    try:
-        yield
-    finally:
-        await close_pool()
-        await close_cache()
-        logger.info("Muse AI Engine stopped")
+
+    yield
+
+    await close_pool()
+    await close_cache()
+    logger.info("Muse AI Engine stopped")
 
 
 app = FastAPI(title="Muse AI Engine", version="1.0.0", lifespan=lifespan)
@@ -82,7 +66,7 @@ class AnalysisRequest(BaseModel):
 
 class ScrapeRequest(BaseModel):
     url: str
-    bypass_cache: bool = False
+    bypass_cache: bool = False  # Allow bypassing cache for fresh data
 
 
 class SynthesizeRequest(BaseModel):
@@ -105,56 +89,53 @@ def _unsafe_url_response(message: str) -> JSONResponse:
     )
 
 
-def _make_scrape_key(url: str) -> str:
-    """Generate cache key for URL scraping."""
-    return f"scrape:web:{hashlib.sha256(url.encode()).hexdigest()}"
-
-
-def _make_youtube_key(url: str) -> str:
-    """Generate cache key for YouTube transcripts."""
-    return f"scrape:youtube:{hashlib.sha256(url.encode()).hexdigest()}"
-
-
-def _make_social_key(url: str) -> str:
-    """Generate cache key for social media scraping."""
-    return f"scrape:social:{hashlib.sha256(url.encode()).hexdigest()}"
-
-
-def _make_document_key(file_bytes: bytes, filename: str) -> str:
-    """Generate cache key for document parsing."""
-    content_hash = hashlib.sha256(file_bytes).hexdigest()
-    return f"parse:document:{content_hash}:{filename}"
-
-
-def _make_synthesis_key(room_id: str, artifact_ids: list) -> str:
-    """Generate cache key for synthesis results."""
-    ids_str = ",".join(sorted(str(aid) for aid in artifact_ids))
-    return f"synthesis:room:{room_id}:{hashlib.sha256(ids_str.encode()).hexdigest()}"
-
-
 @app.get("/")
 def read_root():
-    return {"status": "AI Engine is running", "cache": "enabled" if CACHE_AVAILABLE else "disabled"}
+    return {"status": "AI Engine is running", "cache": "enabled"}
 
 
 @app.get("/api/cache/stats")
-async def cache_stats_endpoint():
+async def cache_stats():
     """Get cache statistics."""
+    from cache import get_cache_stats
     return await get_cache_stats()
 
 
 @app.post("/api/cache/invalidate")
-async def cache_invalidate_endpoint(request: CacheInvalidateRequest):
+async def cache_invalidate(request: CacheInvalidateRequest):
     """Invalidate cache entries by pattern."""
     count = await invalidate_pattern(request.pattern)
     return {"status": "success", "invalidated": count}
 
 
 @app.post("/api/cache/flush")
-async def cache_flush_endpoint():
+async def cache_flush():
     """Flush all cache entries."""
+    from cache import flush_cache
     success = await flush_cache()
     return {"status": "success" if success else "failed"}
+
+
+# ============================================
+# Cached Scrape Endpoints
+# ============================================
+
+def _make_scrape_key(url: str) -> str:
+    """Generate cache key for URL scraping."""
+    import hashlib
+    return f"scrape:web:{hashlib.sha256(url.encode()).hexdigest()}"
+
+
+def _make_youtube_key(url: str) -> str:
+    """Generate cache key for YouTube transcripts."""
+    import hashlib
+    return f"scrape:youtube:{hashlib.sha256(url.encode()).hexdigest()}"
+
+
+def _make_social_key(url: str) -> str:
+    """Generate cache key for social media scraping."""
+    import hashlib
+    return f"scrape:social:{hashlib.sha256(url.encode()).hexdigest()}"
 
 
 @app.post("/api/scrape")
@@ -170,38 +151,27 @@ async def scrape_url(request: ScrapeRequest):
         return _unsafe_url_response(str(exc))
 
     # Check cache first (unless bypass requested)
-    if CACHE_AVAILABLE and not request.bypass_cache:
-        if "youtube.com" in url or "youtu.be" in url:
-            cache_key = _make_youtube_key(url)
-            cache_ttl = 604800  # 7 days for YouTube
-        elif any(domain in url for domain in ["twitter.com", "x.com", "reddit.com", "linkedin.com", "instagram.com"]):
-            cache_key = _make_social_key(url)
-            cache_ttl = 43200  # 12 hours for social media
-        else:
-            cache_key = _make_scrape_key(url)
-            cache_ttl = 86400  # 24 hours for web pages
-
+    if not request.bypass_cache:
+        from cache import get_with_fallback
+        cache_key = _make_scrape_key(url)
         cached_result = await get_with_fallback(cache_key)
         if cached_result:
-            logger.info("Cache hit for scrape: %s", url[:50])
+            logger.info("Cache hit for scrape: %s", url)
             return cached_result
 
     # Route to appropriate scraper
     if "youtube.com" in url or "youtu.be" in url:
         result = await scrape_youtube_transcript(url)
-        if CACHE_AVAILABLE:
-            cache_key = _make_youtube_key(url)
-            cache_ttl = 604800
+        cache_key = _make_youtube_key(url)
+        cache_ttl = 604800  # 7 days for YouTube
     elif any(domain in url for domain in ["twitter.com", "x.com", "reddit.com", "linkedin.com", "instagram.com"]):
         result = await scrape_social_media(url)
-        if CACHE_AVAILABLE:
-            cache_key = _make_social_key(url)
-            cache_ttl = 43200
+        cache_key = _make_social_key(url)
+        cache_ttl = 43200  # 12 hours for social media
     else:
         result = await scrape_webpage(url)
-        if CACHE_AVAILABLE:
-            cache_key = _make_scrape_key(url)
-            cache_ttl = 86400
+        cache_key = _make_scrape_key(url)
+        cache_ttl = 86400  # 24 hours for web pages
 
     if result.get("status") == "error":
         message = result.get("message", "Scrape failed")
@@ -210,11 +180,16 @@ async def scrape_url(request: ScrapeRequest):
         raise HTTPException(status_code=400, detail=message)
 
     # Cache successful results
-    if CACHE_AVAILABLE and result.get("status") == "success":
+    if result.get("status") == "success":
+        from cache import set_with_fallback
         await set_with_fallback(cache_key, result, cache_ttl)
 
     return result
 
+
+# ============================================
+# Cached Upload Endpoint
+# ============================================
 
 def _validate_upload_filename(filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
@@ -255,6 +230,13 @@ async def _read_upload_with_cap(file: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
+def _make_document_key(file_bytes: bytes, filename: str) -> str:
+    """Generate cache key for document parsing."""
+    import hashlib
+    content_hash = hashlib.sha256(file_bytes).hexdigest()
+    return f"parse:document:{content_hash}:{filename}"
+
+
 @app.post("/api/upload-document")
 async def upload_document(file: UploadFile = File(...)):
     """Upload and parse document with caching."""
@@ -265,12 +247,12 @@ async def upload_document(file: UploadFile = File(...)):
     file_bytes = await _read_upload_with_cap(file)
 
     # Check cache
-    if CACHE_AVAILABLE:
-        cache_key = _make_document_key(file_bytes, file.filename)
-        cached_result = await get_with_fallback(cache_key)
-        if cached_result:
-            logger.info("Cache hit for document: %s", file.filename)
-            return cached_result
+    cache_key = _make_document_key(file_bytes, file.filename)
+    from cache import get_with_fallback
+    cached_result = await get_with_fallback(cache_key)
+    if cached_result:
+        logger.info("Cache hit for document: %s", file.filename)
+        return cached_result
 
     # Parse document
     result = await parse_document(file_bytes, file.filename)
@@ -278,10 +260,23 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=result.get("message"))
 
     # Cache successful result
-    if CACHE_AVAILABLE and result.get("status") == "success":
+    if result.get("status") == "success":
+        from cache import set_with_fallback
         await set_with_fallback(cache_key, result, 2592000)  # 30 days
 
     return result
+
+
+# ============================================
+# Cached Synthesis Endpoint
+# ============================================
+
+def _make_synthesis_key(room_id: str, artifact_ids: list[str]) -> str:
+    """Generate cache key for synthesis results."""
+    import hashlib
+    # Sort IDs for consistent key
+    ids_str = ",".join(sorted(artifact_ids))
+    return f"synthesis:room:{room_id}:{hashlib.sha256(ids_str.encode()).hexdigest()}"
 
 
 @app.post("/api/synthesize")
@@ -298,10 +293,11 @@ async def synthesize_room(request: SynthesizeRequest):
 
         # Generate cache key from artifact IDs
         artifact_ids = [str(a.get("id", "")) for a in artifacts]
+        cache_key = _make_synthesis_key(request.room_id, artifact_ids)
 
         # Check cache (unless bypass requested)
-        if CACHE_AVAILABLE and not request.bypass_cache:
-            cache_key = _make_synthesis_key(request.room_id, artifact_ids)
+        if not request.bypass_cache:
+            from cache import get_with_fallback
             cached_result = await get_with_fallback(cache_key)
             if cached_result:
                 logger.info("Cache hit for synthesis: room %s", request.room_id)
@@ -314,11 +310,10 @@ async def synthesize_room(request: SynthesizeRequest):
         # Run synthesis
         db_threads = await synthesize_artifacts(artifacts)
 
-        # Cache and save result (expensive operation!)
+        # Cache result (expensive operation!)
         if db_threads:
-            if CACHE_AVAILABLE:
-                cache_key = _make_synthesis_key(request.room_id, artifact_ids)
-                await set_with_fallback(cache_key, db_threads, 604800)  # 7 days
+            from cache import set_with_fallback
+            await set_with_fallback(cache_key, db_threads, 604800)  # 7 days
             await save_threads(request.room_id, db_threads)
 
         return {
@@ -330,6 +325,10 @@ async def synthesize_room(request: SynthesizeRequest):
         logger.exception("Synthesis failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
+
+# ============================================
+# Analyze Endpoint (Legacy, simple)
+# ============================================
 
 @app.post("/api/analyze")
 def analyze_content(request: AnalysisRequest):

@@ -1,0 +1,24 @@
+# ============================================
+# AI Engine - Optional Heavy Features
+# ============================================
+# Install these ONLY if specific features are needed
+# Estimated additional size: ~400MB
+# ============================================
+
+# Playwright for social media scraping
+playwright==1.42.0
+
+# Unstructured for document parsing (full version)
+unstructured[all-docs]==0.13.7
+
+# ============================================
+# Usage:
+# 1. Social media scraping: Install playwright only
+# 2. Document uploads: Install unstructured only
+# 3. Both features: Install both
+#
+# These are DISABLED by default in MVP
+# Enable via Docker build args:
+#   docker build --build-arg INSTALL_PLAYWRIGHT=true
+#   docker build --build-arg INSTALL_DOCUMENT_PARSERS=true
+# ============================================

@@ -1,0 +1,218 @@
+# ============================================
+# Muse — Production docker-compose (Optimized)
+# ============================================
+# Target: self-hosted VPS (2 vCPU / 4GB RAM)
+# Changes from original:
+#   - Added resource limits for all services
+#   - Added Redis caching layer
+#   - Removed blockchain if not needed for MVP
+#   - Health checks for all services
+# ============================================
+
+services:
+  # ============================================
+  # Reverse Proxy
+  # ============================================
+  caddy:
+    image: caddy:2.7-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend-gateway:
+        condition: service_healthy
+    networks: [muse]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # ============================================
+  # Frontend Gateway
+  # ============================================
+  frontend-gateway:
+    build:
+      context: ../../frontend-gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - PORT=8000
+      - AI_ENGINE_URL=http://ai-engine:8000
+      - BLOCKCHAIN_URL=${BLOCKCHAIN_URL:-http://blockchain-security:3000}
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - NODE_ENV=${NODE_ENV:-production}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-engine:
+        condition: service_started
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [muse]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # ============================================
+  # AI Engine (Optimized)
+  # ============================================
+  ai-engine:
+    build:
+      context: ../../ai-engine
+      dockerfile: Dockerfile.optimized
+      args:
+        INSTALL_PLAYWRIGHT: "false"  # Disable for MVP, enable when social scraping needed
+        INSTALL_DOCUMENT_PARSERS: "true"
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY}
+      - GLM_MODEL=${GLM_MODEL:-glm-4}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - REDIS_URL=redis://redis:6379
+      - DB_POOL_MAX=5  # Reduced from 10 for 2 vCPU
+      - ENABLE_SCRAPING=true
+      - ENABLE_UPLOADS=true
+      - ENABLE_SOCIAL_SCRAPING=false  # Disable heavy feature for MVP
+      - CACHE_ENABLED=true
+      - CACHE_TTL_DEFAULT=3600  # 1 hour default TTL
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [muse]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 48mb --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks: [muse]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [muse]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+  # ============================================
+  # Blockchain Security (Optional - Disable for MVP)
+  # ============================================
+  blockchain-security:
+    build:
+      context: ../../blockchain-security
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - PORT=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [muse]
+    profiles:
+      - blockchain  # Only start with: docker compose --profile blockchain
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  muse:
+    driver: bridge

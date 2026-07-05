@@ -9,9 +9,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5
 _POOL: Optional[asyncpg.Pool] = None
 
 
-async def init_pool(database_url: str = DATABASE_URL, min_size: int = 1, max_size: int = 10) -> asyncpg.Pool:
+async def init_pool(database_url: str = DATABASE_URL, min_size: int = 1, max_size: Optional[int] = None) -> asyncpg.Pool:
     global _POOL
     if _POOL is None:
+        if max_size is None:
+            max_size = int(os.getenv("DB_POOL_MAX", "5"))
         _POOL = await asyncpg.create_pool(
             dsn=database_url,
             min_size=min_size,

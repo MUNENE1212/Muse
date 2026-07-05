@@ -1,0 +1,109 @@
+# ============================================
+# Optimized Multi-Stage Dockerfile for AI Engine
+# ============================================
+# Target: <500MB image (from 7.62GB)
+# Build strategy: Separate build/runtime, conditional heavy deps
+# ============================================
+
+# ============================================
+# Stage 1: Builder - Compile Python extensions
+# ============================================
+FROM python:3.12-alpine AS builder
+
+# Build dependencies for Python packages
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    cargo \
+    build-base \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /build
+
+# Copy and install Python dependencies
+COPY requirements.txt requirements-core.txt requirements-ai.txt requirements-optional.txt* ./
+
+# Install core + AI requirements (always needed for MVP)
+RUN pip install --no-cache-dir --prefix=/install \
+    -r requirements-core.txt \
+    -r requirements-ai.txt
+
+# Install optional features conditionally
+RUN if [ "$INSTALL_DOCUMENT_PARSERS" = "true" ]; then \
+    pip install --no-cache-dir --prefix=/install 'unstructured[local-inference,pillow-pdf]==0.13.7'; \
+    fi
+
+# ============================================
+# Stage 2: Runtime - Minimal production image
+# ============================================
+FROM python:3.12-alpine
+
+# Build args for conditional feature installation
+ARG INSTALL_PLAYWRIGHT=false
+ARG INSTALL_DOCUMENT_PARSERS=false
+
+# Minimal runtime dependencies
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    libffi \
+    openssl \
+    && rm -rf /var/cache/apk/*
+
+# Install document parser dependencies ONLY if enabled
+RUN if [ "$INSTALL_DOCUMENT_PARSERS" = "true" ]; then \
+    apk add --no-cache \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-data-eng \
+    libmagic \
+    && rm -rf /var/cache/apk/*; \
+    fi
+
+# Install playwright ONLY if enabled
+RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
+    apk add --no-cache \
+    libstdc++ \
+    libgcc \
+    chromium \
+    && rm -rf /var/cache/apk/*; \
+    fi
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Create non-root user
+RUN addgroup -g 1001 muse && \
+    adduser -D -u 1001 -G muse -h /app -s /sbin/nologin muse
+
+WORKDIR /app
+
+# Copy application code
+COPY --chown=muse:muse . .
+
+# Install playwright Python bindings conditionally
+RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
+    pip install --no-cache-dir playwright==1.42.0 && \
+    playwright install --with-deps chromium; \
+    fi
+
+# Switch to non-root user
+USER muse
+
+# Expose port
+EXPOSE 8000
+
+# Health check (including cache check)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8000/api/cache/stats || exit 1
+
+# Use uvloop for better performance
+CMD ["uvicorn", "main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "1", \
+     "--loop", "uvloop", \
+     "--proxy-headers", \
+     "--log-level", "info"]

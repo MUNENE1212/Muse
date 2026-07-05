@@ -1,11 +1,38 @@
 import re
-
-from playwright.async_api import async_playwright
+import os
 
 from url_safety import UnsafeURLError, resolve_url
 
+# Check if playwright is available
+PLAYWRIGHT_AVAILABLE = False
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    pass
+
 
 async def scrape_social_media(url: str) -> dict:
+    # Check if social scraping is enabled via environment variable
+    if os.getenv("ENABLE_SOCIAL_SCRAPING", "false").lower() != "true":
+        return {
+            "status": "error",
+            "type": "social_media",
+            "message": "Social media scraping is disabled. Set ENABLE_SOCIAL_SCRAPING=true to enable.",
+            "url": url,
+            "error_code": "feature_disabled",
+        }
+
+    # Check if playwright is available
+    if not PLAYWRIGHT_AVAILABLE:
+        return {
+            "status": "error",
+            "type": "social_media",
+            "message": "Playwright is not installed. Social media scraping requires Playwright.",
+            "url": url,
+            "error_code": "playwright_not_installed",
+        }
+
     try:
         resolved = resolve_url(url)
     except UnsafeURLError as exc:
