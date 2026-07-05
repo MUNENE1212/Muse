@@ -10,4 +10,5 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["task", "start"]
+# Run in production mode (not dev mode)
+CMD ["deno", "run", "-A", "--unstable-kv", "main.ts"]
