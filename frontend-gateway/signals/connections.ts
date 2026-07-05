@@ -278,6 +278,28 @@ export function synthesizePerspective(content: string, targetId: string) {
   submitPerspective(content, targetId, "Journal Synthesis");
 }
 
+export function joinCircle(circleId: string) {
+  circlesSignal.value = circlesSignal.value.map((c) =>
+    c.id === circleId
+      ? { ...c, memberCount: c.memberCount + 1, recentActivity: "Just now" }
+      : c
+  );
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("circle:joined", { detail: circleId }));
+  }
+}
+
+export function leaveCircle(circleId: string) {
+  circlesSignal.value = circlesSignal.value.map((c) =>
+    c.id === circleId
+      ? { ...c, memberCount: Math.max(0, c.memberCount - 1), recentActivity: "Just now" }
+      : c
+  );
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("circle:left", { detail: circleId }));
+  }
+}
+
 export const insightsSignal = signal<string[]>([
   "Local Elections are trending across 3 rooms in your network.",
   "Your synthesis on 'Love Languages' has 86 resonance connections.",
