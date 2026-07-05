@@ -27,6 +27,8 @@ services:
       frontend-gateway:
         condition: service_healthy
     networks: [muse]
+    profiles:
+      - caddy  # Only start with: docker compose --profile caddy
     deploy:
       resources:
         limits:
